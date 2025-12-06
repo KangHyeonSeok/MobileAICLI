@@ -1,5 +1,6 @@
 # MobileAICLI
-ai cli를 모바일에서 사용 할 수 있도록 하는 프로젝트
+AI cli를 모바일에서 remote로 사용 할 수 있도록 하는 프로젝트
+출퇴근 시간 너무 아까워서 휴대폰으로 바이브 코딩 하고 싶어서 만들기 시작 함.
 
 A .NET 8 Blazor Server application that provides a mobile-friendly web UI for AI CLIs (starting with GitHub Copilot CLI), file browsing, editing, and whitelisted terminal command execution.
 

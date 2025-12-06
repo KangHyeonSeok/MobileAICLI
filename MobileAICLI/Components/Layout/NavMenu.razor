@@ -1,36 +1,46 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">MobileAICLI</a>
-    </div>
+﻿<div class="nav-header">
+    <span class="nav-title">MobileAICLI</span>
 </div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+<div class="nav-scrollable">
     <nav class="flex-column">
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All" title="Home" @onclick="HandleNavigate">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span>
+                <span class="nav-text">Home</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="copilot">
-                <span class="bi bi-robot" aria-hidden="true"></span> Copilot
+            <NavLink class="nav-link" href="copilot" title="Copilot" @onclick="HandleNavigate">
+                <span class="bi bi-robot" aria-hidden="true"></span>
+                <span class="nav-text">Copilot</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="files">
-                <span class="bi bi-folder-fill" aria-hidden="true"></span> Files
+            <NavLink class="nav-link" href="files" title="Files" @onclick="HandleNavigate">
+                <span class="bi bi-folder-fill" aria-hidden="true"></span>
+                <span class="nav-text">Files</span>
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="terminal">
-                <span class="bi bi-terminal-fill" aria-hidden="true"></span> Terminal
+            <NavLink class="nav-link" href="terminal" title="Terminal" @onclick="HandleNavigate">
+                <span class="bi bi-terminal-fill" aria-hidden="true"></span>
+                <span class="nav-text">Terminal</span>
             </NavLink>
         </div>
     </nav>
 </div>
+
+@code {
+    [Parameter]
+    public EventCallback OnNavigate { get; set; }
+
+    private async Task HandleNavigate()
+    {
+        await OnNavigate.InvokeAsync();
+    }
+}
 
