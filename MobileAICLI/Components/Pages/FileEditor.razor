@@ -1,0 +1,153 @@
+@page "/editor/{*filePath}"
+@using MobileAICLI.Services
+@inject FileService FileService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Edit File</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">Edit File</h3>
+    <button class="btn btn-secondary btn-sm" @onclick="GoBack">
+        <i class="bi bi-arrow-left"></i> Back
+    </button>
+</div>
+
+@if (!string.IsNullOrEmpty(FilePath))
+{
+    <div class="mb-3">
+        <small class="text-muted">@FilePath</small>
+    </div>
+}
+
+@if (isLoading)
+{
+    <div class="text-center p-4">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="mb-3">
+        <textarea class="form-control font-monospace" rows="20" @bind="fileContent" 
+                  style="font-size: 14px; white-space: pre; overflow-wrap: normal; overflow-x: auto;"></textarea>
+    </div>
+
+    <div class="d-grid gap-2 d-md-flex justify-content-md-start">
+        <button class="btn btn-primary" @onclick="SaveFile" disabled="@isSaving">
+            @if (isSaving)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            }
+            Save
+        </button>
+        <button class="btn btn-secondary" @onclick="ReloadFile" disabled="@isSaving">
+            Reload
+        </button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(message))
+{
+    <div class="alert @(isError ? "alert-danger" : "alert-success") mt-3" role="alert">
+        @message
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? FilePath { get; set; }
+
+    private string fileContent = string.Empty;
+    private bool isLoading = true;
+    private bool isSaving = false;
+    private string message = string.Empty;
+    private bool isError = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFile();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!isLoading)
+        {
+            await LoadFile();
+        }
+    }
+
+    private async Task LoadFile()
+    {
+        if (string.IsNullOrEmpty(FilePath))
+        {
+            message = "No file specified";
+            isError = true;
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        message = string.Empty;
+
+        var (success, content) = await FileService.ReadFileAsync(FilePath);
+        
+        if (success)
+        {
+            fileContent = content;
+        }
+        else
+        {
+            message = content;
+            isError = true;
+        }
+
+        isLoading = false;
+    }
+
+    private async Task SaveFile()
+    {
+        if (string.IsNullOrEmpty(FilePath))
+        {
+            message = "No file specified";
+            isError = true;
+            return;
+        }
+
+        isSaving = true;
+        message = string.Empty;
+
+        var (success, msg) = await FileService.WriteFileAsync(FilePath, fileContent);
+        
+        message = msg;
+        isError = !success;
+        isSaving = false;
+    }
+
+    private async Task ReloadFile()
+    {
+        await LoadFile();
+    }
+
+    private void GoBack()
+    {
+        if (!string.IsNullOrEmpty(FilePath))
+        {
+            var directory = System.IO.Path.GetDirectoryName(FilePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            if (string.IsNullOrEmpty(directory))
+            {
+                Navigation.NavigateTo("/files");
+            }
+            else
+            {
+                Navigation.NavigateTo($"/files/{directory.Replace(System.IO.Path.DirectorySeparatorChar, '/')}");
+            }
+        }
+        else
+        {
+            Navigation.NavigateTo("/files");
+        }
+    }
+}
