@@ -43,6 +43,9 @@ See [MobileAICLI/README.md](MobileAICLI/README.md) for detailed documentation.
 ## Requirements
 
 - .NET 8.0 SDK
+- Github cli
+*brew install gh*
+webinstall.dev/gh/
 - GitHub coiplot CLI for Copilot features
 *npm install -g @github/copilot*
 - macOS or Linux (recommended)
