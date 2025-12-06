@@ -56,6 +56,12 @@ public class XxxService
 ```
 
 ### Security Patterns (Critical)
+- **개인정보 보호 (필수)**:
+  - ❌ 사용자 이름, 경로, IP 주소 등 개인정보가 포함된 코드/설명/구문 작성 금지
+  - ❌ API 키, 토큰, 비밀번호 등 민감 정보 하드코딩 금지
+  - ❌ 개인정보가 포함된 커밋 금지
+  - ✅ 환경변수 또는 설정 파일을 통해 민감 정보 관리
+  - ✅ 예시 경로는 `/path/to/repo`, `~/Documents` 등 일반적 표현 사용
 - **Path Validation**: Always use `Path.GetRelativePath()` to verify paths don't escape `RepositoryPath`:
   ```csharp
   var relPath = Path.GetRelativePath(repoPath, fullPath);
