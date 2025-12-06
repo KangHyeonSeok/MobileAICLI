@@ -26,14 +26,22 @@ public class CopilotService
 
             var startInfo = new ProcessStartInfo
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{_settings.GitHubCopilotCommand} suggest \\\"{prompt.Replace("\"", "\\\\\\\"")}\\\"\"",
+                FileName = _settings.GitHubCopilotCommand.Split(' ')[0],
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _settings.RepositoryPath
             };
+
+            // Use ArgumentList for safer command execution
+            var commandParts = _settings.GitHubCopilotCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 1; i < commandParts.Length; i++)
+            {
+                startInfo.ArgumentList.Add(commandParts[i]);
+            }
+            startInfo.ArgumentList.Add("suggest");
+            startInfo.ArgumentList.Add(prompt);
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
@@ -48,7 +56,7 @@ public class CopilotService
 
             if (process.ExitCode != 0 && string.IsNullOrEmpty(output))
             {
-                return (false, string.Empty, error.Contains("gh: command not found") 
+                return (false, string.Empty, error.Contains("gh: command not found") || error.Contains("not found")
                     ? "GitHub CLI (gh) is not installed. Please install it to use Copilot features."
                     : error);
             }
@@ -73,14 +81,22 @@ public class CopilotService
 
             var startInfo = new ProcessStartInfo
             {
-                FileName = "/bin/bash",
-                Arguments = $"-c \"{_settings.GitHubCopilotCommand} explain \\\"{command.Replace("\"", "\\\\\\\"")}\\\"\"",
+                FileName = _settings.GitHubCopilotCommand.Split(' ')[0],
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _settings.RepositoryPath
             };
+
+            // Use ArgumentList for safer command execution
+            var commandParts = _settings.GitHubCopilotCommand.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 1; i < commandParts.Length; i++)
+            {
+                startInfo.ArgumentList.Add(commandParts[i]);
+            }
+            startInfo.ArgumentList.Add("explain");
+            startInfo.ArgumentList.Add(command);
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
@@ -95,7 +111,7 @@ public class CopilotService
 
             if (process.ExitCode != 0 && string.IsNullOrEmpty(output))
             {
-                return (false, string.Empty, error.Contains("gh: command not found")
+                return (false, string.Empty, error.Contains("gh: command not found") || error.Contains("not found")
                     ? "GitHub CLI (gh) is not installed. Please install it to use Copilot features."
                     : error);
             }

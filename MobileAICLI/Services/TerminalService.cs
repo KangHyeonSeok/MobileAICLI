@@ -19,22 +19,30 @@ public class TerminalService
     {
         try
         {
-            // Check if command is allowed
+            // Check if command is allowed and safe
             if (!IsCommandAllowed(command))
             {
                 return (false, string.Empty, "Command not allowed. Check your whitelist configuration.");
             }
 
+            if (ContainsDangerousCharacters(command))
+            {
+                return (false, string.Empty, "Command contains dangerous characters or operators (;, |, &, >, <, `, $, etc.)");
+            }
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = "/bin/bash",
-                Arguments = $"-c \"{command.Replace("\"", "\\\"")}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = _settings.RepositoryPath
             };
+
+            // Use ArgumentList for safer command execution
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add(command);
 
             using var process = new Process { StartInfo = startInfo };
             process.Start();
@@ -54,6 +62,13 @@ public class TerminalService
             _logger.LogError(ex, "Error executing command: {Command}", command);
             return (false, string.Empty, $"Error: {ex.Message}");
         }
+    }
+
+    private bool ContainsDangerousCharacters(string command)
+    {
+        // Prevent command chaining and shell injection
+        char[] dangerousChars = { ';', '|', '&', '>', '<', '`', '$', '\n', '\r' };
+        return command.IndexOfAny(dangerousChars) >= 0 || command.Contains("&&") || command.Contains("||");
     }
 
     private bool IsCommandAllowed(string command)

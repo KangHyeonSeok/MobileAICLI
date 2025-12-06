@@ -31,11 +31,13 @@ public class FileService
                 ? _settings.RepositoryPath 
                 : Path.Combine(_settings.RepositoryPath, relativePath);
 
-            // Ensure path is within the repository
+            // Ensure path is within the repository with robust validation
             var fullPath = Path.GetFullPath(path);
             var repoPath = Path.GetFullPath(_settings.RepositoryPath);
             
-            if (!fullPath.StartsWith(repoPath))
+            // Use Path.GetRelativePath to ensure path is within repository
+            var relPath = Path.GetRelativePath(repoPath, fullPath);
+            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
             {
                 _logger.LogWarning("Attempted to access path outside repository: {Path}", fullPath);
                 return new List<FileItem>();
@@ -91,7 +93,9 @@ public class FileService
             var fullPath = Path.GetFullPath(Path.Combine(_settings.RepositoryPath, relativePath));
             var repoPath = Path.GetFullPath(_settings.RepositoryPath);
 
-            if (!fullPath.StartsWith(repoPath))
+            // Use Path.GetRelativePath for robust path validation
+            var relPath = Path.GetRelativePath(repoPath, fullPath);
+            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
             {
                 return (false, "Access denied: Path is outside repository");
             }
@@ -118,7 +122,9 @@ public class FileService
             var fullPath = Path.GetFullPath(Path.Combine(_settings.RepositoryPath, relativePath));
             var repoPath = Path.GetFullPath(_settings.RepositoryPath);
 
-            if (!fullPath.StartsWith(repoPath))
+            // Use Path.GetRelativePath for robust path validation
+            var relPath = Path.GetRelativePath(repoPath, fullPath);
+            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
             {
                 return (false, "Access denied: Path is outside repository");
             }
