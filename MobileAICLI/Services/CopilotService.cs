@@ -24,6 +24,11 @@ public class CopilotService
                 return (false, string.Empty, "Please provide a prompt");
             }
 
+            if (string.IsNullOrWhiteSpace(_settings.GitHubCopilotCommand))
+            {
+                return (false, string.Empty, "GitHub Copilot command is not configured");
+            }
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = _settings.GitHubCopilotCommand.Split(' ')[0],
@@ -77,6 +82,11 @@ public class CopilotService
             if (string.IsNullOrWhiteSpace(command))
             {
                 return (false, string.Empty, "Please provide a command to explain");
+            }
+
+            if (string.IsNullOrWhiteSpace(_settings.GitHubCopilotCommand))
+            {
+                return (false, string.Empty, "GitHub Copilot command is not configured");
             }
 
             var startInfo = new ProcessStartInfo

@@ -27,7 +27,7 @@ public class TerminalService
 
             if (ContainsDangerousCharacters(command))
             {
-                return (false, string.Empty, "Command contains dangerous characters or operators (;, |, &, >, <, `, $, etc.)");
+                return (false, string.Empty, "Command contains dangerous characters or operators (;, |, &, &&, ||, >, <, `, $, newlines)");
             }
 
             var startInfo = new ProcessStartInfo
