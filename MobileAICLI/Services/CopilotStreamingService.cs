@@ -41,7 +41,8 @@ public class CopilotStreamingService
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WorkingDirectory = GetSafeWorkingDirectory()
             };
 
             using var process = new Process { StartInfo = startInfo };
@@ -86,7 +87,8 @@ public class CopilotStreamingService
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                CreateNoWindow = true
+                CreateNoWindow = true,
+                WorkingDirectory = GetSafeWorkingDirectory()
             };
 
             using var process = new Process { StartInfo = startInfo };
@@ -284,7 +286,7 @@ public class CopilotStreamingService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = _settings.RepositoryPath
+            WorkingDirectory = GetSafeWorkingDirectory()
         };
 
         // Programmatic 모드: copilot -p "prompt" --silent
@@ -294,7 +296,7 @@ public class CopilotStreamingService
         
         // 작업 디렉토리 접근 허용
         startInfo.ArgumentList.Add("--add-dir");
-        startInfo.ArgumentList.Add(_settings.RepositoryPath);
+        startInfo.ArgumentList.Add(GetSafeWorkingDirectory());
 
         // 도구 설정 적용
         if (toolSettings != null)
@@ -349,6 +351,25 @@ public class CopilotStreamingService
         // "gh copilot" 형태인 경우 첫 번째 단어만 반환
         // 나머지는 인자로 처리해야 함
         return command.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
+    }
+
+    private string GetSafeWorkingDirectory()
+    {
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
+            {
+                return _settings.RepositoryPath;
+            }
+
+            var fallback = Environment.CurrentDirectory;
+            _logger.LogWarning("RepositoryPath does not exist. Using fallback working directory: {WorkingDirectory}", fallback);
+            return fallback;
+        }
+        catch
+        {
+            return Environment.CurrentDirectory;
+        }
     }
 
     private static string TruncateForLog(string text, int maxLength = 100)
