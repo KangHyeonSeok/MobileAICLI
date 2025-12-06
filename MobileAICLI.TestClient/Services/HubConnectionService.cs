@@ -191,15 +191,17 @@ public class HubConnectionService
 
     #region Copilot (Streaming)
 
-    public async Task<CommandResult> AskCopilotAsync(string prompt, Action<string>? onOutput = null)
+    public async Task<CommandResult> AskCopilotAsync(string prompt, Action<string>? onOutput = null, Action<string>? onError = null)
     {
         if (_connection == null) return CommandResult.Failure("Not connected");
 
         var result = new CommandResult();
         var output = new List<string>();
+        var errors = new List<string>();
         var tcs = new TaskCompletionSource<bool>();
 
         IDisposable? outputHandler = null;
+        IDisposable? errorHandler = null;
         IDisposable? completeHandler = null;
 
         try
@@ -210,10 +212,17 @@ public class HubConnectionService
                 onOutput?.Invoke(text);
             });
 
+            errorHandler = _connection.On<string>("ReceiveCopilotError", (text) =>
+            {
+                errors.Add(text);
+                onError?.Invoke(text);
+            });
+
             completeHandler = _connection.On<bool, string>("CopilotComplete", (success, error) =>
             {
                 result.Success = success;
                 result.Stdout = string.Join("", output);
+                result.Stderr = string.Join("", errors);
                 result.Error = error;
                 result.ExitCode = success ? 0 : 1;
                 tcs.TrySetResult(true);
@@ -240,6 +249,7 @@ public class HubConnectionService
         finally
         {
             outputHandler?.Dispose();
+            errorHandler?.Dispose();
             completeHandler?.Dispose();
         }
 

@@ -13,6 +13,7 @@ public class TestHub : Hub
     private readonly FileService _fileService;
     private readonly TerminalService _terminalService;
     private readonly CopilotService _copilotService;
+    private readonly CopilotStreamingService _copilotStreamingService;
     private readonly ILogger<TestHub> _logger;
 
     public TestHub(
@@ -20,12 +21,14 @@ public class TestHub : Hub
         FileService fileService,
         TerminalService terminalService,
         CopilotService copilotService,
+        CopilotStreamingService copilotStreamingService,
         ILogger<TestHub> logger)
     {
         _shellService = shellService;
         _fileService = fileService;
         _terminalService = terminalService;
         _copilotService = copilotService;
+        _copilotStreamingService = copilotStreamingService;
         _logger = logger;
     }
 
@@ -119,8 +122,8 @@ public class TestHub : Hub
     #region Copilot (Streaming)
 
     /// <summary>
-    /// Copilot에 질문 (현재는 일괄 응답, 추후 스트리밍 예정)
-    /// Client receives: ReceiveCopilotOutput, CopilotComplete
+    /// Copilot에 질문 (스트리밍)
+    /// Client receives: ReceiveCopilotOutput, ReceiveCopilotError, CopilotComplete
     /// </summary>
     public async Task AskCopilot(string prompt)
     {
@@ -128,16 +131,20 @@ public class TestHub : Hub
 
         try
         {
-            var (success, output, error) = await _copilotService.AskCopilotAsync(prompt);
-
-            if (success)
+            await foreach (var output in _copilotStreamingService.SendPromptStreamingAsync(prompt))
             {
-                await Clients.Caller.SendAsync("ReceiveCopilotOutput", output);
-                await Clients.Caller.SendAsync("CopilotComplete", true, "");
-            }
-            else
-            {
-                await Clients.Caller.SendAsync("CopilotComplete", false, error);
+                switch (output.Type)
+                {
+                    case CopilotOutputType.Output:
+                        await Clients.Caller.SendAsync("ReceiveCopilotOutput", output.Content);
+                        break;
+                    case CopilotOutputType.Error:
+                        await Clients.Caller.SendAsync("ReceiveCopilotError", output.Content);
+                        break;
+                    case CopilotOutputType.Complete:
+                        await Clients.Caller.SendAsync("CopilotComplete", output.Success ?? false, output.ErrorMessage ?? "");
+                        break;
+                }
             }
         }
         catch (Exception ex)
@@ -145,6 +152,25 @@ public class TestHub : Hub
             _logger.LogError(ex, "Error asking Copilot: {Prompt}", prompt);
             await Clients.Caller.SendAsync("CopilotComplete", false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Copilot 상태 확인 (설치 및 인증)
+    /// </summary>
+    public async Task<CopilotStatusInfo> CheckCopilotStatus()
+    {
+        _logger.LogInformation("TestHub.CheckCopilotStatus");
+
+        var (installed, version, installError) = await _copilotStreamingService.CheckInstallationAsync();
+        var (authenticated, user, authError) = await _copilotStreamingService.CheckAuthStatusAsync();
+
+        return new CopilotStatusInfo(
+            installed,
+            version,
+            authenticated,
+            user,
+            installed ? (authenticated ? null : authError) : installError
+        );
     }
 
     /// <summary>
@@ -198,6 +224,7 @@ public class TestHub : Hub
     public record FileResult(bool Success, string Content, string? Error);
     public record WriteResult(bool Success, string Message);
     public record TerminalResult(bool Success, string Output, string Error, int ExitCode);
+    public record CopilotStatusInfo(bool Installed, string? Version, bool Authenticated, string? User, string? Error);
 
     #endregion
 }

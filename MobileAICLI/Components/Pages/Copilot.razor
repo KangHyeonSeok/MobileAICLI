@@ -1,156 +1,364 @@
 @page "/copilot"
+@using Microsoft.AspNetCore.SignalR.Client
 @using MobileAICLI.Services
-@inject CopilotService CopilotService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
 @rendermode InteractiveServer
 
-<PageTitle>GitHub Copilot CLI</PageTitle>
+<PageTitle>GitHub Copilot</PageTitle>
 
-<h3 class="mb-4">GitHub Copilot CLI</h3>
+<div class="copilot-container d-flex flex-column" style="height: calc(100vh - 100px);">
+    @* 상태 표시 바 *@
+    <div class="status-bar px-3 py-2 border-bottom bg-light">
+        <div class="d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-indicator @(isConnected ? "bg-success" : "bg-danger")"></span>
+                <small class="text-muted">
+                    @if (isConnected)
+                    {
+                        <span>Connected</span>
+                        @if (!string.IsNullOrEmpty(copilotUser))
+                        {
+                            <span> • @copilotUser</span>
+                        }
+                    }
+                    else
+                    {
+                        <span>Disconnected</span>
+                    }
+                </small>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
+                <i class="bi bi-arrow-clockwise"></i> Check Status
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(statusError))
+        {
+            <div class="mt-2">
+                <small class="text-danger">@statusError</small>
+            </div>
+        }
+    </div>
 
-<div class="mb-4">
-    <ul class="nav nav-tabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link @(activeTab == "suggest" ? "active" : "")" 
-                    @onclick="@(() => activeTab = "suggest")">
-                Suggest Command
+    @* 채팅 메시지 영역 *@
+    <div class="chat-messages flex-grow-1 overflow-auto p-3" @ref="chatContainer">
+        @if (messages.Count == 0)
+        {
+            <div class="text-center text-muted py-5">
+                <h5>GitHub Copilot CLI</h5>
+                <p>Ask Copilot anything about code, commands, or your project.</p>
+                <p><small>Example: "How do I list all files modified in the last week?"</small></p>
+            </div>
+        }
+        else
+        {
+            @foreach (var message in messages)
+            {
+                <div class="message mb-3 @(message.IsUser ? "message-user" : "message-copilot")">
+                    <div class="message-header mb-1">
+                        <small class="text-muted">
+                            @(message.IsUser ? "You" : "Copilot") • @message.Timestamp.ToString("HH:mm")
+                        </small>
+                    </div>
+                    <div class="message-content p-3 rounded @(message.IsUser ? "bg-primary text-white" : "bg-light")">
+                        @if (message.IsStreaming)
+                        {
+                            <span>@message.Content</span>
+                            <span class="typing-indicator">▋</span>
+                        }
+                        else
+                        {
+                            <pre class="mb-0 @(message.IsUser ? "text-white" : "")" style="white-space: pre-wrap; word-wrap: break-word;">@message.Content</pre>
+                        }
+                        @if (message.HasError)
+                        {
+                            <div class="mt-2 text-danger">
+                                <small>@message.ErrorMessage</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @* 입력 영역 *@
+    <div class="chat-input border-top p-3">
+        <div class="input-group">
+            <textarea class="form-control" 
+                      rows="2" 
+                      @bind="currentPrompt" 
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      placeholder="Ask Copilot..."
+                      disabled="@(isLoading || !isConnected)"></textarea>
+            <button class="btn btn-primary" 
+                    @onclick="SendPrompt" 
+                    disabled="@(isLoading || !isConnected || string.IsNullOrWhiteSpace(currentPrompt))">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                }
+                else
+                {
+                    <span>Send</span>
+                }
             </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link @(activeTab == "explain" ? "active" : "")" 
-                    @onclick="@(() => activeTab = "explain")">
-                Explain Command
+        </div>
+        <div class="mt-2 d-flex justify-content-between">
+            <small class="text-muted">Press Shift+Enter for new line, Enter to send</small>
+            <button class="btn btn-sm btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)">
+                Clear History
             </button>
-        </li>
-    </ul>
+        </div>
+    </div>
 </div>
 
-@if (activeTab == "suggest")
-{
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">Ask Copilot for a Command</h5>
-            <div class="mb-3">
-                <label for="promptInput" class="form-label">What do you want to do?</label>
-                <textarea class="form-control" id="promptInput" rows="3" 
-                          @bind="prompt" 
-                          placeholder="e.g., list all files modified in the last 7 days"></textarea>
-            </div>
-            <button class="btn btn-primary" @onclick="AskCopilot" disabled="@isLoading">
-                @if (isLoading)
-                {
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                }
-                Suggest Command
-            </button>
-        </div>
-    </div>
-}
-else
-{
-    <div class="card mb-3">
-        <div class="card-body">
-            <h5 class="card-title">Explain a Command</h5>
-            <div class="mb-3">
-                <label for="commandInput" class="form-label">Enter command to explain</label>
-                <input type="text" class="form-control" id="commandInput" 
-                       @bind="command" 
-                       placeholder="e.g., ls -la | grep .txt" />
-            </div>
-            <button class="btn btn-primary" @onclick="ExplainCommand" disabled="@isLoading">
-                @if (isLoading)
-                {
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                }
-                Explain Command
-            </button>
-        </div>
-    </div>
-}
-
-@if (!string.IsNullOrEmpty(output))
-{
-    <div class="card">
-        <div class="card-body">
-            <h5 class="card-title text-success">Result</h5>
-            <pre class="bg-light p-3 rounded">@output</pre>
-        </div>
-    </div>
-}
-
-@if (!string.IsNullOrEmpty(error))
-{
-    <div class="alert alert-danger" role="alert">
-        <strong>Error:</strong> @error
-    </div>
-}
+<style>
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .message-user .message-content {
+        margin-left: 20%;
+    }
+    
+    .message-copilot .message-content {
+        margin-right: 20%;
+    }
+    
+    .typing-indicator {
+        animation: blink 1s infinite;
+    }
+    
+    @@keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+    
+    .chat-messages {
+        scroll-behavior: smooth;
+    }
+    
+    pre {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+</style>
 
 @code {
-    private string activeTab = "suggest";
-    private string prompt = string.Empty;
-    private string command = string.Empty;
-    private string output = string.Empty;
-    private string error = string.Empty;
+    private HubConnection? hubConnection;
+    private List<ChatMessage> messages = new();
+    private string currentPrompt = string.Empty;
     private bool isLoading = false;
+    private bool isConnected = false;
+    private string? copilotUser;
+    private string? statusError;
+    private ElementReference chatContainer;
+    private ChatMessage? currentStreamingMessage;
 
-    private async Task AskCopilot()
+    protected override async Task OnInitializedAsync()
     {
-        if (string.IsNullOrWhiteSpace(prompt))
-        {
-            error = "Please enter a prompt";
-            return;
-        }
+        await InitializeHubConnection();
+    }
 
-        isLoading = true;
-        output = string.Empty;
-        error = string.Empty;
+    private async Task InitializeHubConnection()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/copilothub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        // 출력 수신
+        hubConnection.On<string>("ReceiveOutput", async (content) =>
+        {
+            if (currentStreamingMessage != null)
+            {
+                currentStreamingMessage.Content += content;
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+            }
+        });
+
+        // 에러 수신
+        hubConnection.On<string>("ReceiveError", async (content) =>
+        {
+            if (currentStreamingMessage != null)
+            {
+                currentStreamingMessage.Content += content;
+                currentStreamingMessage.HasError = true;
+                await InvokeAsync(StateHasChanged);
+                await ScrollToBottom();
+            }
+        });
+
+        // 완료 수신
+        hubConnection.On<bool, string?>("ReceiveComplete", async (success, error) =>
+        {
+            if (currentStreamingMessage != null)
+            {
+                currentStreamingMessage.IsStreaming = false;
+                if (!success && !string.IsNullOrEmpty(error))
+                {
+                    currentStreamingMessage.HasError = true;
+                    currentStreamingMessage.ErrorMessage = error;
+                }
+                currentStreamingMessage = null;
+            }
+            isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.Reconnecting += error =>
+        {
+            isConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        hubConnection.Reconnected += connectionId =>
+        {
+            isConnected = true;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        hubConnection.Closed += error =>
+        {
+            isConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
 
         try
         {
-            var (success, result, errorMessage) = await CopilotService.AskCopilotAsync(prompt);
+            await hubConnection.StartAsync();
+            isConnected = true;
+            await CheckCopilotStatus();
+        }
+        catch (Exception ex)
+        {
+            statusError = $"Failed to connect: {ex.Message}";
+        }
+    }
+
+    private async Task CheckCopilotStatus()
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            statusError = null;
+            var result = await hubConnection.InvokeAsync<CopilotStatusResult>("CheckStatus");
             
-            if (success)
+            if (result.Installed && result.Authenticated)
             {
-                output = result;
+                copilotUser = result.User;
+                statusError = null;
             }
             else
             {
-                error = errorMessage;
+                statusError = result.Error ?? "Copilot CLI is not properly configured";
+                copilotUser = null;
             }
         }
-        finally
+        catch (Exception ex)
         {
+            statusError = $"Failed to check status: {ex.Message}";
+        }
+    }
+
+    private async Task SendPrompt()
+    {
+        if (string.IsNullOrWhiteSpace(currentPrompt) || hubConnection is null) return;
+
+        var prompt = currentPrompt.Trim();
+        currentPrompt = string.Empty;
+
+        // 사용자 메시지 추가
+        messages.Add(new ChatMessage
+        {
+            Content = prompt,
+            IsUser = true,
+            Timestamp = DateTime.Now
+        });
+
+        // Copilot 응답 메시지 준비 (스트리밍)
+        currentStreamingMessage = new ChatMessage
+        {
+            Content = string.Empty,
+            IsUser = false,
+            IsStreaming = true,
+            Timestamp = DateTime.Now
+        };
+        messages.Add(currentStreamingMessage);
+
+        isLoading = true;
+        StateHasChanged();
+        await ScrollToBottom();
+
+        try
+        {
+            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null);
+        }
+        catch (Exception ex)
+        {
+            currentStreamingMessage.Content = $"Error: {ex.Message}";
+            currentStreamingMessage.IsStreaming = false;
+            currentStreamingMessage.HasError = true;
+            currentStreamingMessage = null;
             isLoading = false;
         }
     }
 
-    private async Task ExplainCommand()
+    private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (string.IsNullOrWhiteSpace(command))
+        if (e.Key == "Enter" && !e.ShiftKey)
         {
-            error = "Please enter a command";
-            return;
+            await SendPrompt();
         }
+    }
 
-        isLoading = true;
-        output = string.Empty;
-        error = string.Empty;
+    private void ClearHistory()
+    {
+        messages.Clear();
+        currentStreamingMessage = null;
+    }
 
-        try
+    private async Task ScrollToBottom()
+    {
+        await Task.Delay(50); // DOM 업데이트 대기
+        // JavaScript interop으로 스크롤
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
         {
-            var (success, result, errorMessage) = await CopilotService.ExplainCommandAsync(command);
-            
-            if (success)
-            {
-                output = result;
-            }
-            else
-            {
-                error = errorMessage;
-            }
+            await hubConnection.DisposeAsync();
         }
-        finally
-        {
-            isLoading = false;
-        }
+    }
+
+    private class ChatMessage
+    {
+        public string Content { get; set; } = string.Empty;
+        public bool IsUser { get; set; }
+        public bool IsStreaming { get; set; }
+        public bool HasError { get; set; }
+        public string? ErrorMessage { get; set; }
+        public DateTime Timestamp { get; set; }
+    }
+
+    // Hub에서 반환하는 타입과 일치해야 함
+    private class CopilotStatusResult
+    {
+        public bool Installed { get; set; }
+        public string? Version { get; set; }
+        public bool Authenticated { get; set; }
+        public string? User { get; set; }
+        public string? Error { get; set; }
     }
 }

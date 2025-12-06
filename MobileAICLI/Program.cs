@@ -21,6 +21,7 @@ builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
+builder.Services.AddScoped<CopilotStreamingService>();
 
 var app = builder.Build();
 
@@ -38,6 +39,9 @@ app.MapRazorComponents<App>()
 
 // Map SignalR Hub for shell streaming
 app.MapHub<ShellHub>("/shellhub");
+
+// Map SignalR Hub for Copilot CLI
+app.MapHub<CopilotHub>("/copilothub");
 
 // Map SignalR Hub for integration testing
 app.MapHub<TestHub>("/testhub");
