@@ -11,7 +11,7 @@ cd MobileAICLI
 dotnet run
 ```
 
-Then navigate to http://localhost:5285
+Then navigate to http://localhost:5252
 
 ## Features
 
