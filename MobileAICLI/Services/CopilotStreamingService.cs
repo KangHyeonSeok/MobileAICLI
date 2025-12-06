@@ -82,7 +82,7 @@ public class CopilotStreamingService
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = "gh",
+                FileName = _settings.GitHubCliPath,
                 Arguments = "auth status",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
