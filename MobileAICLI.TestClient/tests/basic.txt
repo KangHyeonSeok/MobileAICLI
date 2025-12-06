@@ -1,0 +1,30 @@
+# MobileAICLI 기본 테스트 스크립트
+# 실행: MobileAICLI.TestClient http://localhost:5252 --script tests/basic.txt
+
+# === 테스트 1: Shell echo ===
+TEST shell_echo
+shell echo "Hello World"
+EXPECT_EXIT 0
+EXPECT_CONTAINS Hello World
+
+# === 테스트 2: 파일 목록 ===
+TEST list_files
+files
+EXPECT_EXIT 0
+
+# === 테스트 3: 파일 읽기 (appsettings.json) ===
+TEST read_appsettings
+read MobileAICLI/appsettings.json
+EXPECT_EXIT 0
+EXPECT_CONTAINS MobileAICLI
+
+# === 테스트 4: Shell dir (Windows) ===
+TEST shell_dir_windows
+shell dir
+EXPECT_EXIT 0
+
+# === 테스트 5: 존재하지 않는 파일 ===
+TEST read_nonexistent
+read this_file_does_not_exist.xyz
+EXPECT_EXIT -1
+EXPECT_ERROR File not found

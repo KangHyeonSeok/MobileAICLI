@@ -39,4 +39,7 @@ app.MapRazorComponents<App>()
 // Map SignalR Hub for shell streaming
 app.MapHub<ShellHub>("/shellhub");
 
+// Map SignalR Hub for integration testing
+app.MapHub<TestHub>("/testhub");
+
 app.Run();
