@@ -18,6 +18,12 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: '8.0.x'
+        
+    - name: Debug dotnet path
+      run: |
+        echo "PATH = $PATH"
+        which dotnet
+        xattr -l "$(which dotnet)" || echo "no xattr"
 
     - name: Kill All Running Instances
       continue-on-error: true
