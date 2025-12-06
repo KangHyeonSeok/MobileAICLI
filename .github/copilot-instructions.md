@@ -5,16 +5,14 @@ A .NET 8 Blazor Server app providing mobile-friendly web UI for GitHub Copilot C
 
 ## 📚 Documentation Structure
 
-**문서 작성/수정 시 반드시 참조**: `docs/DOCUMENTATION_GUIDELINES.md`
+**문서 작성/수정 시 반드시 참조**: [DOCUMENTATION_GUIDELINES.md](../docs/DOCUMENTATION_GUIDELINES.md)
 
-```
-docs/
-├── DOCUMENTATION_GUIDELINES.md   # 문서 작성 지침 (필독)
-├── features/                     # 기능별 설계 문서 (사용자/PM용)
-│   └── 01_COPILOT_INTEGRATION.md
-└── technical/                    # 기술 설계 문서 (개발자/AI용)
-    └── COPILOT_INTEGRATION_DESIGN.md
-```
+| 문서 | 설명 |
+|------|------|
+| [DOCUMENTATION_GUIDELINES.md](../docs/DOCUMENTATION_GUIDELINES.md) | 문서 작성 지침 (필독) |
+| [01_COPILOT_INTEGRATION.md](../docs/features/01_COPILOT_INTEGRATION.md) | Copilot 연동 기능 설계 |
+| [COPILOT_INTEGRATION_DESIGN.md](../docs/technical/COPILOT_INTEGRATION_DESIGN.md) | Copilot 기술 설계 |
+| [TEST_CLIENT_DESIGN.md](../docs/technical/TEST_CLIENT_DESIGN.md) | 테스트 클라이언트 설계 |
 
 ### 문서 작성 원칙
 - **코드는 AI가 생성** → 문서에는 설계와 의사결정만 포함
@@ -82,7 +80,16 @@ dotnet build
 
 # Development mode
 dotnet run --environment Development
+
+# Run tests
+dotnet test
 ```
+
+### Unit Testing
+- **가능하면 단위 테스트 작성**: 새로운 서비스나 기능 구현 시 테스트 코드 함께 작성
+- **테스트 프로젝트**: `MobileAICLI.Tests/` (xUnit)
+- **네이밍 규칙**: `{ClassName}Tests.cs`, 메서드명 `{Method}_{Scenario}_{ExpectedResult}`
+- **Mocking**: 외부 의존성(Process, FileSystem)은 인터페이스로 추상화하여 테스트 용이하게
 
 ## Configuration
 Edit `MobileAICLI/appsettings.json`:

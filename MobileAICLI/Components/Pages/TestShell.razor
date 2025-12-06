@@ -1,0 +1,193 @@
+@page "/testshell"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+
+<PageTitle>Shell Test</PageTitle>
+
+<h1>Shell Command Test</h1>
+
+<div class="mb-3">
+    <label for="commandInput" class="form-label">Command</label>
+    <div class="input-group">
+        <input type="text" 
+               id="commandInput" 
+               class="form-control" 
+               @bind="command" 
+               @bind:event="oninput"
+               @onkeydown="HandleKeyDown"
+               placeholder="Enter shell command..."
+               disabled="@isRunning" />
+        <button class="btn btn-primary" 
+                @onclick="ExecuteCommand" 
+                disabled="@(isRunning || string.IsNullOrWhiteSpace(command) || !isConnected)">
+            @if (isRunning)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <span>Running...</span>
+            }
+            else
+            {
+                <span>Execute</span>
+            }
+        </button>
+    </div>
+    <div class="form-text">
+        @if (!isConnected)
+        {
+            <span class="text-danger">⚠️ Not connected to server</span>
+        }
+        else
+        {
+            <span class="text-success">✓ Connected</span>
+        }
+    </div>
+</div>
+
+<div class="mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+        <label class="form-label mb-0">Output</label>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="ClearOutput">Clear</button>
+    </div>
+    <div class="output-container border rounded p-2 bg-dark text-light" 
+         style="min-height: 300px; max-height: 500px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.875rem;"
+         @ref="outputContainer">
+        @foreach (var line in outputLines)
+        {
+            <div class="@(line.IsError ? "text-danger" : "text-light")">@line.Text</div>
+        }
+        @if (isRunning)
+        {
+            <div class="text-info">
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                Processing...
+            </div>
+        }
+    </div>
+</div>
+
+<div class="mb-3">
+    <h6>Quick Commands</h6>
+    <div class="btn-group flex-wrap" role="group">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("echo Hello World"))" disabled="@isRunning">echo</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("dir"))" disabled="@isRunning">dir (Win)</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("ls -la"))" disabled="@isRunning">ls (Linux)</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("pwd"))" disabled="@isRunning">pwd</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("ping -n 3 localhost"))" disabled="@isRunning">ping (Win)</button>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="@(() => SetCommand("ping -c 3 localhost"))" disabled="@isRunning">ping (Linux)</button>
+    </div>
+</div>
+
+@code {
+    private HubConnection? hubConnection;
+    private string command = "";
+    private List<OutputLine> outputLines = new();
+    private bool isRunning = false;
+    private bool isConnected = false;
+    private ElementReference outputContainer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/shellhub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<string>("ReceiveOutput", (message) =>
+        {
+            outputLines.Add(new OutputLine(message, false));
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<string>("ReceiveError", (message) =>
+        {
+            outputLines.Add(new OutputLine(message, true));
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<int, string>("ReceiveComplete", (exitCode, error) =>
+        {
+            isRunning = false;
+            if (!string.IsNullOrEmpty(error))
+            {
+                outputLines.Add(new OutputLine($"[Error: {error}]", true));
+            }
+            outputLines.Add(new OutputLine($"[Process completed with exit code: {exitCode}]", exitCode != 0));
+            InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.Closed += (error) =>
+        {
+            isConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        hubConnection.Reconnected += (connectionId) =>
+        {
+            isConnected = true;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            await hubConnection.StartAsync();
+            isConnected = true;
+        }
+        catch (Exception ex)
+        {
+            outputLines.Add(new OutputLine($"[Connection failed: {ex.Message}]", true));
+        }
+    }
+
+    [Inject]
+    private NavigationManager Navigation { get; set; } = default!;
+
+    private async Task ExecuteCommand()
+    {
+        if (hubConnection is null || string.IsNullOrWhiteSpace(command) || isRunning)
+            return;
+
+        isRunning = true;
+        outputLines.Add(new OutputLine($"> {command}", false));
+        
+        try
+        {
+            await hubConnection.InvokeAsync("ExecuteCommand", command);
+        }
+        catch (Exception ex)
+        {
+            outputLines.Add(new OutputLine($"[Error: {ex.Message}]", true));
+            isRunning = false;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isRunning && !string.IsNullOrWhiteSpace(command) && isConnected)
+        {
+            await ExecuteCommand();
+        }
+    }
+
+    private void SetCommand(string cmd)
+    {
+        command = cmd;
+    }
+
+    private void ClearOutput()
+    {
+        outputLines.Clear();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    private record OutputLine(string Text, bool IsError);
+}

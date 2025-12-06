@@ -1,4 +1,5 @@
 using MobileAICLI.Components;
+using MobileAICLI.Hubs;
 using MobileAICLI.Models;
 using MobileAICLI.Services;
 
@@ -12,10 +13,14 @@ builder.Services.Configure<MobileAICLISettings>(
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add SignalR for real-time communication
+builder.Services.AddSignalR();
+
 // Add application services
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
+builder.Services.AddScoped<ShellStreamingService>();
 
 var app = builder.Build();
 
@@ -30,5 +35,8 @@ app.UseAntiforgery();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Map SignalR Hub for shell streaming
+app.MapHub<ShellHub>("/shellhub");
 
 app.Run();
