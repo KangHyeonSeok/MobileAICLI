@@ -46,6 +46,8 @@ See [MobileAICLI/README.md](MobileAICLI/README.md) for detailed documentation.
 - Github cli
 *brew install gh*
 webinstall.dev/gh/
+gh login
 - GitHub coiplot CLI for Copilot features
 *npm install -g @github/copilot*
+copilot -i /login
 - macOS or Linux (recommended)
