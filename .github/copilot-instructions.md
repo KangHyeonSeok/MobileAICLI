@@ -1,13 +1,32 @@
 # MobileAICLI - AI Coding Instructions
 
 ## Project Overview
-A .NET 8 Blazor Server app providing mobile-friendly web UI for GitHub Copilot CLI, file browsing, and secure terminal command execution. Runs on `http://localhost:5285`.
+A .NET 8 Blazor Server app providing mobile-friendly web UI for GitHub Copilot CLI, file browsing, and secure terminal command execution. Runs on `http://0.0.0.0:5252`.
+
+## 📚 Documentation Structure
+
+**문서 작성/수정 시 반드시 참조**: `docs/DOCUMENTATION_GUIDELINES.md`
+
+```
+docs/
+├── DOCUMENTATION_GUIDELINES.md   # 문서 작성 지침 (필독)
+├── features/                     # 기능별 설계 문서 (사용자/PM용)
+│   └── 01_COPILOT_INTEGRATION.md
+└── technical/                    # 기술 설계 문서 (개발자/AI용)
+    └── COPILOT_INTEGRATION_DESIGN.md
+```
+
+### 문서 작성 원칙
+- **코드는 AI가 생성** → 문서에는 설계와 의사결정만 포함
+- **20줄 이상 코드 블록 금지** → 제약 조건과 맥락만 제공
+- **features/**: 비개발자도 이해 가능한 기능 설명
+- **technical/**: AI가 참조할 설계 방향, 제약 조건, 아키텍처
 
 ## Architecture
 
 ### Core Pattern: Service Layer + Blazor Pages
 - **Services** (`Services/`): Business logic with `IOptions<MobileAICLISettings>` dependency injection
-  - `CopilotService`: Wraps `gh copilot suggest/explain` via `Process.Start()`
+  - `CopilotService`: Wraps `copilot -p "prompt"` via `Process.Start()` (Programmatic Mode)
   - `FileService`: Sandboxed file operations within `RepositoryPath`
   - `TerminalService`: Whitelisted command execution with security validation
 - **Pages** (`Components/Pages/`): Blazor components with `@rendermode InteractiveServer`
@@ -71,7 +90,7 @@ Edit `MobileAICLI/appsettings.json`:
 {
   "MobileAICLI": {
     "RepositoryPath": "/path/to/repo",
-    "GitHubCopilotCommand": "gh copilot",
+    "GitHubCopilotCommand": "copilot",
     "AllowedShellCommands": ["ls", "pwd", "git status"]
   }
 }
@@ -81,3 +100,5 @@ Edit `MobileAICLI/appsettings.json`:
 - Services: `*Service.cs` in `Services/`
 - Pages: `*.razor` in `Components/Pages/`
 - Models: `*Settings.cs` in `Models/`
+- Feature Docs: `docs/features/NN_FEATURE_NAME.md`
+- Technical Docs: `docs/technical/FEATURE_DESIGN.md`
