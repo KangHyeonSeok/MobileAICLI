@@ -18,7 +18,7 @@ jobs:
       uses: actions/setup-dotnet@v3
       with:
         dotnet-version: '8.0.x'
-        
+
     - name: Debug dotnet path
       run: |
         echo "PATH = $PATH"
@@ -35,5 +35,5 @@ jobs:
 
     - name: Start MobileAICLI with PM2
       run: |
-        pm2 start $HOME/Documents/MobileAICLIRuntime/MobileAICLI --name "MobileAICLI"
+        pm2 start $HOME/Documents/MobileAICLIRuntime/MobileAICLI --name "MobileAICLI" --cwd $HOME/Documents/MobileAICLIRuntime -- --urls "http://0.0.0.0:5252"
         pm2 save
