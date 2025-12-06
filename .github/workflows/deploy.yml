@@ -1,0 +1,33 @@
+name: Build and Deploy MobileAICLI
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: [self-hosted, macOS, X64]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        
+    - name: Setup .NET 8.0 SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Kill All Running Instances
+      continue-on-error: true
+      run: |
+        pm2 delete MobileAICLI || true
+
+    - name: Build
+      run: dotnet publish MobileAICLI/MobileAICLI.csproj --output $HOME/Documents/MobileAICLIRuntime --configuration Release
+
+    - name: Start MobileAICLI with PM2
+      run: |
+        pm2 start $HOME/Documents/MobileAICLIRuntime/MobileAICLI --name "MobileAICLI"
+        pm2 save
