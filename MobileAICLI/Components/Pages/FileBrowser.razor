@@ -1,0 +1,135 @@
+@page "/files"
+@page "/files/{*path}"
+@using MobileAICLI.Services
+@inject FileService FileService
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>File Browser</PageTitle>
+
+<h3 class="mb-4">File Browser</h3>
+
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="/files" @onclick="() => NavigateToPath(null)" @onclick:preventDefault>Home</a>
+        </li>
+        @if (!string.IsNullOrEmpty(Path))
+        {
+            var parts = Path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            var currentPath = "";
+            foreach (var part in parts)
+            {
+                currentPath = string.IsNullOrEmpty(currentPath) ? part : $"{currentPath}/{part}";
+                var pathToNavigate = currentPath;
+                <li class="breadcrumb-item">
+                    <a href="/files/@pathToNavigate" @onclick="() => NavigateToPath(pathToNavigate)" @onclick:preventDefault>@part</a>
+                </li>
+            }
+        }
+    </ol>
+</nav>
+
+@if (isLoading)
+{
+    <div class="text-center p-4">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="list-group">
+        @if (!string.IsNullOrEmpty(Path))
+        {
+            <a href="#" @onclick="NavigateUp" @onclick:preventDefault class="list-group-item list-group-item-action">
+                <i class="bi bi-arrow-up"></i> ..
+            </a>
+        }
+        
+        @foreach (var item in files)
+        {
+            @if (item.IsDirectory)
+            {
+                <a href="/files/@item.FullPath" @onclick="() => NavigateToPath(item.FullPath)" @onclick:preventDefault 
+                   class="list-group-item list-group-item-action">
+                    <i class="bi bi-folder-fill text-warning"></i> @item.Name
+                </a>
+            }
+            else
+            {
+                <a href="/editor/@item.FullPath" class="list-group-item list-group-item-action">
+                    <i class="bi bi-file-earmark-text"></i> @item.Name
+                    <small class="text-muted float-end">@FormatFileSize(item.Size)</small>
+                </a>
+            }
+        }
+        
+        @if (files.Count == 0)
+        {
+            <div class="list-group-item text-muted">
+                <em>No files or directories found</em>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Path { get; set; }
+
+    private List<FileService.FileItem> files = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadFiles();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadFiles();
+    }
+
+    private async Task LoadFiles()
+    {
+        isLoading = true;
+        files = await FileService.GetFilesAsync(Path);
+        isLoading = false;
+    }
+
+    private void NavigateToPath(string? path)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            Navigation.NavigateTo("/files");
+        }
+        else
+        {
+            Navigation.NavigateTo($"/files/{path}");
+        }
+    }
+
+    private void NavigateUp()
+    {
+        if (string.IsNullOrEmpty(Path))
+            return;
+
+        var parentPath = System.IO.Path.GetDirectoryName(Path.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        NavigateToPath(parentPath?.Replace(System.IO.Path.DirectorySeparatorChar, '/'));
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+}

@@ -1,0 +1,120 @@
+@page "/terminal"
+@using MobileAICLI.Services
+@inject TerminalService TerminalService
+@rendermode InteractiveServer
+
+<PageTitle>Terminal</PageTitle>
+
+<h3 class="mb-4">Terminal</h3>
+
+<div class="alert alert-info" role="alert">
+    <strong>Note:</strong> Only whitelisted commands are allowed. Check your appsettings.json configuration.
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="commandInput" class="form-label">Enter command</label>
+            <input type="text" class="form-control font-monospace" id="commandInput" 
+                   @bind="command" 
+                   @onkeydown="HandleKeyDown"
+                   placeholder="e.g., ls -la" />
+        </div>
+        <button class="btn btn-primary" @onclick="ExecuteCommand" disabled="@isExecuting">
+            @if (isExecuting)
+            {
+                <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            }
+            Execute
+        </button>
+        <button class="btn btn-secondary ms-2" @onclick="ClearHistory">
+            Clear History
+        </button>
+    </div>
+</div>
+
+@if (commandHistory.Any())
+{
+    <div class="card">
+        <div class="card-header bg-dark text-white">
+            <strong>Command History</strong>
+        </div>
+        <div class="card-body bg-dark text-light p-3" style="max-height: 500px; overflow-y: auto;">
+            <div class="font-monospace" style="font-size: 14px; white-space: pre-wrap;">
+                @foreach (var entry in commandHistory)
+                {
+                    <div class="mb-3">
+                        <div class="text-info">$ @entry.Command</div>
+                        @if (entry.Success)
+                        {
+                            @if (!string.IsNullOrEmpty(entry.Output))
+                            {
+                                <div class="text-success">@entry.Output</div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-danger">@entry.Error</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string command = string.Empty;
+    private bool isExecuting = false;
+    private List<CommandHistoryEntry> commandHistory = new();
+
+    private class CommandHistoryEntry
+    {
+        public string Command { get; set; } = string.Empty;
+        public bool Success { get; set; }
+        public string Output { get; set; } = string.Empty;
+        public string Error { get; set; } = string.Empty;
+    }
+
+    private async Task ExecuteCommand()
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            return;
+        }
+
+        isExecuting = true;
+
+        try
+        {
+            var (success, output, error) = await TerminalService.ExecuteCommandAsync(command);
+            
+            commandHistory.Add(new CommandHistoryEntry
+            {
+                Command = command,
+                Success = success,
+                Output = output,
+                Error = error
+            });
+
+            command = string.Empty;
+        }
+        finally
+        {
+            isExecuting = false;
+        }
+    }
+
+    private void ClearHistory()
+    {
+        commandHistory.Clear();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !isExecuting)
+        {
+            await ExecuteCommand();
+        }
+    }
+}

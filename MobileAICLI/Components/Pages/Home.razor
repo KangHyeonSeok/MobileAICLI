@@ -1,0 +1,73 @@
+﻿@page "/"
+
+<PageTitle>MobileAICLI - Home</PageTitle>
+
+<h1>MobileAICLI</h1>
+<p class="lead">Mobile-friendly web UI for AI CLIs and file management</p>
+
+<div class="row mt-4">
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-robot"></i> GitHub Copilot CLI
+                </h5>
+                <p class="card-text">
+                    Ask GitHub Copilot to suggest commands or explain existing ones.
+                </p>
+                <a href="/copilot" class="btn btn-primary">Open Copilot</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-folder"></i> File Browser
+                </h5>
+                <p class="card-text">
+                    Browse and edit files in your repository.
+                </p>
+                <a href="/files" class="btn btn-primary">Browse Files</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-terminal"></i> Terminal
+                </h5>
+                <p class="card-text">
+                    Execute whitelisted shell commands in your repository.
+                </p>
+                <a href="/terminal" class="btn btn-primary">Open Terminal</a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <h5 class="card-title">
+                    <i class="bi bi-gear"></i> Configuration
+                </h5>
+                <p class="card-text">
+                    Configure repository path, CLI commands, and allowed shell commands via <code>appsettings.json</code>.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4" role="alert">
+    <strong>Getting Started:</strong>
+    <ul class="mb-0 mt-2">
+        <li>Configure your settings in <code>appsettings.json</code></li>
+        <li>Set your <code>RepositoryPath</code> to the directory you want to work with</li>
+        <li>Ensure GitHub CLI (<code>gh</code>) is installed for Copilot features</li>
+        <li>Add allowed commands to the <code>AllowedShellCommands</code> list</li>
+    </ul>
+</div>

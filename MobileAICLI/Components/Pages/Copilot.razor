@@ -1,0 +1,156 @@
+@page "/copilot"
+@using MobileAICLI.Services
+@inject CopilotService CopilotService
+@rendermode InteractiveServer
+
+<PageTitle>GitHub Copilot CLI</PageTitle>
+
+<h3 class="mb-4">GitHub Copilot CLI</h3>
+
+<div class="mb-4">
+    <ul class="nav nav-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "suggest" ? "active" : "")" 
+                    @onclick="@(() => activeTab = "suggest")">
+                Suggest Command
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(activeTab == "explain" ? "active" : "")" 
+                    @onclick="@(() => activeTab = "explain")">
+                Explain Command
+            </button>
+        </li>
+    </ul>
+</div>
+
+@if (activeTab == "suggest")
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Ask Copilot for a Command</h5>
+            <div class="mb-3">
+                <label for="promptInput" class="form-label">What do you want to do?</label>
+                <textarea class="form-control" id="promptInput" rows="3" 
+                          @bind="prompt" 
+                          placeholder="e.g., list all files modified in the last 7 days"></textarea>
+            </div>
+            <button class="btn btn-primary" @onclick="AskCopilot" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                }
+                Suggest Command
+            </button>
+        </div>
+    </div>
+}
+else
+{
+    <div class="card mb-3">
+        <div class="card-body">
+            <h5 class="card-title">Explain a Command</h5>
+            <div class="mb-3">
+                <label for="commandInput" class="form-label">Enter command to explain</label>
+                <input type="text" class="form-control" id="commandInput" 
+                       @bind="command" 
+                       placeholder="e.g., ls -la | grep .txt" />
+            </div>
+            <button class="btn btn-primary" @onclick="ExplainCommand" disabled="@isLoading">
+                @if (isLoading)
+                {
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                }
+                Explain Command
+            </button>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(output))
+{
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title text-success">Result</h5>
+            <pre class="bg-light p-3 rounded">@output</pre>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger" role="alert">
+        <strong>Error:</strong> @error
+    </div>
+}
+
+@code {
+    private string activeTab = "suggest";
+    private string prompt = string.Empty;
+    private string command = string.Empty;
+    private string output = string.Empty;
+    private string error = string.Empty;
+    private bool isLoading = false;
+
+    private async Task AskCopilot()
+    {
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            error = "Please enter a prompt";
+            return;
+        }
+
+        isLoading = true;
+        output = string.Empty;
+        error = string.Empty;
+
+        try
+        {
+            var (success, result, errorMessage) = await CopilotService.AskCopilotAsync(prompt);
+            
+            if (success)
+            {
+                output = result;
+            }
+            else
+            {
+                error = errorMessage;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExplainCommand()
+    {
+        if (string.IsNullOrWhiteSpace(command))
+        {
+            error = "Please enter a command";
+            return;
+        }
+
+        isLoading = true;
+        output = string.Empty;
+        error = string.Empty;
+
+        try
+        {
+            var (success, result, errorMessage) = await CopilotService.ExplainCommandAsync(command);
+            
+            if (success)
+            {
+                output = result;
+            }
+            else
+            {
+                error = errorMessage;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
