@@ -130,7 +130,16 @@
             </button>
         </div>
         <div class="mt-2 d-flex justify-content-between align-items-center px-1">
-            <small class="text-muted">Shift+Enter = newline</small>
+            <small class="text-muted">
+                @if (isMobile)
+                {
+                    <span>Enter = newline</span>
+                }
+                else
+                {
+                    <span>Shift+Enter = newline</span>
+                }
+            </small>
             <button class="btn btn-sm btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)">
                 Clear
             </button>
@@ -274,14 +283,33 @@
     private ChatMessage? currentStreamingMessage;
     private CopilotSettings copilotSettings = new();
     private bool showSettingsPanel = false;
+    private bool showSettingsPanel = false;
     private string selectedModel = "default";
     private string currentModel = "default";
     private List<string> allowedModels = new() { "default" };
+    private bool isMobile = false;
 
     protected override async Task OnInitializedAsync()
     {
+        CheckIsMobile();
         await LoadSettings();
         await InitializeHubConnection();
+    }
+
+    private void CheckIsMobile()
+    {
+        try
+        {
+            var userAgent = HttpContextAccessor.HttpContext?.Request?.Headers["User-Agent"].ToString() ?? "";
+            isMobile = userAgent.Contains("Mobile", StringComparison.OrdinalIgnoreCase) || 
+                       userAgent.Contains("Android", StringComparison.OrdinalIgnoreCase) || 
+                       userAgent.Contains("iPhone", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // Fallback if context is not available
+            isMobile = false; 
+        }
     }
 
     private async Task LoadSettings()
@@ -498,7 +526,9 @@
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (e.Key == "Enter" && !e.ShiftKey)
+        // Mobile: Enter operates as default (newline), manual send required
+        // Desktop: Enter sends (unless Shift is pressed)
+        if (!isMobile && e.Key == "Enter" && !e.ShiftKey)
         {
             await SendPrompt();
         }
