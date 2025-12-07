@@ -1,5 +1,6 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 16px; /* 모바일 우선 폰트 크기 */
 }
 
 a, .btn-link {
@@ -58,11 +59,8 @@ h1:focus {
    Desktop: >= 992px
 */
 
-/* Mobile & touch: width <= 1080px or coarse pointer */
+/* Mobile & touch: 기본 스타일 이미 16px, 아래는 여백/컨트롤 확대 유지 */
 @media (max-width: 1080px), (pointer: coarse) {
-    body {
-        font-size: 16px;
-    }
 
     .content {
         padding: 1.5rem;
@@ -119,26 +117,34 @@ h1:focus {
     }
 }
 
-/* Tablet: 768px ~ 991px (Bootstrap md) */
-@media (min-width: 768px) and (max-width: 991.98px) {
-    body {
-        font-size: 15px;
-    }
-
-    .btn {
-        min-height: 44px;
-        padding: 10px 16px;
-    }
-
-    .form-control, textarea.form-control {
-        min-height: 44px;
-    }
-}
-
-/* Desktop: >= 992px (Bootstrap lg) - Default styles */
+/* Desktop and large screens: 줄여서 배치 */
 @media (min-width: 992px) {
     body {
         font-size: 14px;
+    }
+
+    .btn {
+        min-height: 40px;
+        padding: 8px 14px;
+        font-size: 14px;
+        width: auto;
+        margin-bottom: 0;
+    }
+
+    .btn-sm {
+        min-height: 32px;
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+
+    .form-control, textarea.form-control, .form-select {
+        min-height: 40px;
+        font-size: 14px;
+        padding: 8px 12px;
+    }
+
+    .container-fluid {
+        padding: 1rem;
     }
 }
 
