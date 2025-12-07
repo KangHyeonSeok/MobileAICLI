@@ -508,10 +508,9 @@
             { 
                 CopilotSettings = copilotSettings 
             };
-            await hubConnection.SendAsync("SendPrompt", prompt, toolSettings);
             // Validate selected model against allowed list
             var modelToUse = allowedModels.Contains(selectedModel) ? selectedModel : currentModel;
-            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null, modelToUse);
+            await hubConnection.SendAsync("SendPrompt", prompt, toolSettings, modelToUse);
         }
         catch (Exception ex)
         {
