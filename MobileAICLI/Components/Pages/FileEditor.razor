@@ -1,7 +1,9 @@
 @page "/editor/{*filePath}"
+@using Microsoft.AspNetCore.Authorization
 @using MobileAICLI.Services
 @inject FileService FileService
 @inject NavigationManager Navigation
+@attribute [Authorize]
 @rendermode InteractiveServer
 
 <PageTitle>Edit File</PageTitle>

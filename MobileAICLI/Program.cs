@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Server;
 using MobileAICLI.Components;
 using MobileAICLI.Hubs;
 using MobileAICLI.Models;
@@ -9,9 +13,43 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<MobileAICLISettings>(
     builder.Configuration.GetSection("MobileAICLI"));
 
+// Add HttpContextAccessor for accessing HttpContext in Blazor components
+builder.Services.AddHttpContextAccessor();
+
+// Configure authentication
+var settings = builder.Configuration.GetSection("MobileAICLI").Get<MobileAICLISettings>() ?? new MobileAICLISettings();
+
+if (settings.EnableAuthentication)
+{
+    builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        .AddCookie(options =>
+        {
+            options.LoginPath = "/login";
+            options.LogoutPath = "/logout";
+            options.AccessDeniedPath = "/login";
+            options.ExpireTimeSpan = TimeSpan.FromMinutes(settings.SessionTimeoutMinutes);
+            options.SlidingExpiration = true;
+            options.Cookie.HttpOnly = true;
+            options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest; // Use Secure in production with HTTPS
+            options.Cookie.SameSite = SameSiteMode.Lax;
+        });
+
+    builder.Services.AddAuthorization();
+    builder.Services.AddCascadingAuthenticationState();
+}
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Add controllers for authentication API
+builder.Services.AddControllers();
+
+// Add HttpClient for Blazor components
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(sp.GetRequiredService<NavigationManager>().BaseUri)
+});
 
 // Add SignalR for real-time communication
 builder.Services.AddSignalR();
@@ -24,6 +62,7 @@ builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
 builder.Services.AddScoped<SettingsService>();
+builder.Services.AddSingleton<AuthService>();
 
 var app = builder.Build();
 
@@ -36,17 +75,32 @@ if (!app.Environment.IsDevelopment())
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// Add authentication middleware
+if (settings.EnableAuthentication)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// Map SignalR Hub for shell streaming
-app.MapHub<ShellHub>("/shellhub");
+// Map controllers
+app.MapControllers();
 
-// Map SignalR Hub for Copilot CLI
-app.MapHub<CopilotHub>("/copilothub");
-
-// Map SignalR Hub for integration testing
-app.MapHub<TestHub>("/testhub");
+// Map SignalR Hubs - require authentication if enabled
+if (settings.EnableAuthentication)
+{
+    app.MapHub<ShellHub>("/shellhub").RequireAuthorization();
+    app.MapHub<CopilotHub>("/copilothub").RequireAuthorization();
+    app.MapHub<TestHub>("/testhub").RequireAuthorization();
+}
+else
+{
+    app.MapHub<ShellHub>("/shellhub");
+    app.MapHub<CopilotHub>("/copilothub");
+    app.MapHub<TestHub>("/testhub");
+}
 
 // Map SignalR Hub for settings management
 app.MapHub<SettingsHub>("/settingshub");
