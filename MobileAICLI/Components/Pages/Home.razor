@@ -6,9 +6,10 @@
 <PageTitle>MobileAICLI</PageTitle>
 
 @code {
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         // Redirect to Copilot page for quick access
-        NavigationManager.NavigateTo("/copilot", forceLoad: false);
+        await Task.CompletedTask;
+        NavigationManager.NavigateTo("/copilot", forceLoad: false, replace: true);
     }
 }
