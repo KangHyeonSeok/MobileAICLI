@@ -1,6 +1,6 @@
 html, body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    font-size: 16px; /* 모바일 우선 폰트 크기 */
+    font-size: clamp(16px, 4vw, 18px); /* 모바일 우선 + 소형 화면 확대 */
 }
 
 a, .btn-link {
@@ -76,9 +76,9 @@ h1:focus {
 
     /* Touch-friendly buttons - minimum 44x44px */
     .btn {
-        min-height: 48px;
-        padding: 12px 20px;
-        font-size: 16px;
+        min-height: 52px;
+        padding: 14px 22px;
+        font-size: 17px;
         width: 100%;
         margin-bottom: 0.5rem;
     }
@@ -95,14 +95,14 @@ h1:focus {
 
     /* Touch-friendly form controls */
     .form-control, textarea.form-control {
-        min-height: 48px;
-        font-size: 16px;
-        padding: 12px;
+        min-height: 52px;
+        font-size: 17px;
+        padding: 14px;
     }
 
     .form-select {
-        min-height: 48px;
-        font-size: 16px;
+        min-height: 52px;
+        font-size: 17px;
     }
 
     /* Larger icons for mobile */
