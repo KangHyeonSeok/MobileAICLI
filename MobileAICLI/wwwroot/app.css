@@ -110,7 +110,8 @@ h1:focus {
     }
 
     /* Larger icons for mobile */
-    .bi {
+    .nav-menu .bi,
+    .btn .bi {
         font-size: 24px;
     }
 
