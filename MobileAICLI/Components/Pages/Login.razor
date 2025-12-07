@@ -1,11 +1,7 @@
 @page "/login"
-@using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.Authentication.Cookies
-@using System.Security.Claims
-@using MobileAICLI.Services
-@inject AuthService AuthService
+@using Microsoft.JSInterop
 @inject NavigationManager Navigation
-@inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Login - MobileAICLI</PageTitle>
 
@@ -83,51 +79,23 @@
 
         try
         {
-            var httpContext = HttpContextAccessor.HttpContext;
-            if (httpContext == null)
+            // Use JavaScript helper to call the API to ensure cookies are handled properly
+            var result = await JSRuntime.InvokeAsync<LoginResponse>("authHelper.login", _loginModel.Password);
+            
+            if (result?.Success == true)
             {
-                _errorMessage = "Authentication error. Please try again.";
-                return;
-            }
-
-            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-            var (success, errorMessage) = await AuthService.ValidatePasswordAsync(_loginModel.Password, ipAddress);
-
-            if (success)
-            {
-                // Create claims for the authenticated user
-                var claims = new List<Claim>
-                {
-                    new Claim(ClaimTypes.Name, "admin"),
-                    new Claim(ClaimTypes.Role, "Administrator"),
-                    new Claim("AuthenticatedAt", DateTime.UtcNow.ToString("O"))
-                };
-
-                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-                var authProperties = new AuthenticationProperties
-                {
-                    IsPersistent = false, // Session cookie (deleted when browser closes)
-                    ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30),
-                    AllowRefresh = true
-                };
-
-                await httpContext.SignInAsync(
-                    CookieAuthenticationDefaults.AuthenticationScheme,
-                    new ClaimsPrincipal(claimsIdentity),
-                    authProperties);
-
                 // Redirect to return URL or home
                 var redirectUrl = string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl;
                 Navigation.NavigateTo(redirectUrl, forceLoad: true);
             }
             else
             {
-                _errorMessage = errorMessage ?? "Authentication failed";
+                _errorMessage = result?.Error ?? "Authentication failed";
             }
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _errorMessage = "An error occurred during authentication";
+            _errorMessage = $"An error occurred during authentication: {ex.Message}";
         }
         finally
         {
@@ -139,5 +107,11 @@
     private class LoginModel
     {
         public string Password { get; set; } = string.Empty;
+    }
+
+    private class LoginResponse
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
     }
 }

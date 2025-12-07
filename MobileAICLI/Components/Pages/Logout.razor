@@ -1,8 +1,7 @@
 @page "/logout"
-@using Microsoft.AspNetCore.Authentication
-@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.JSInterop
 @inject NavigationManager Navigation
-@inject IHttpContextAccessor HttpContextAccessor
+@inject IJSRuntime JSRuntime
 
 <PageTitle>Logout - MobileAICLI</PageTitle>
 
@@ -22,10 +21,13 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        var httpContext = HttpContextAccessor.HttpContext;
-        if (httpContext != null)
+        try
         {
-            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            await JSRuntime.InvokeVoidAsync("authHelper.logout");
+        }
+        catch
+        {
+            // Ignore errors during logout
         }
         
         // Redirect to login page

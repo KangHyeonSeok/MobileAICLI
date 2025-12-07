@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Server;
 using MobileAICLI.Components;
 using MobileAICLI.Hubs;
 using MobileAICLI.Models;
@@ -40,6 +42,15 @@ if (settings.EnableAuthentication)
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Add controllers for authentication API
+builder.Services.AddControllers();
+
+// Add HttpClient for Blazor components
+builder.Services.AddScoped(sp => new HttpClient
+{
+    BaseAddress = new Uri(sp.GetRequiredService<NavigationManager>().BaseUri)
+});
+
 // Add SignalR for real-time communication
 builder.Services.AddSignalR();
 
@@ -71,6 +82,9 @@ if (settings.EnableAuthentication)
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
+
+// Map controllers
+app.MapControllers();
 
 // Map SignalR Hubs - require authentication if enabled
 if (settings.EnableAuthentication)
