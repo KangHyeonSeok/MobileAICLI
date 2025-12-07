@@ -84,7 +84,10 @@
     private bool IsSettingsPage()
     {
         var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        return path.StartsWith("settings", StringComparison.OrdinalIgnoreCase);
+        // Remove query string and fragments
+        var pathOnly = path.Split('?', '#')[0];
+        return pathOnly.Equals("settings", StringComparison.OrdinalIgnoreCase) ||
+               pathOnly.StartsWith("settings/", StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()
