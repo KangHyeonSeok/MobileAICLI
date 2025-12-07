@@ -55,11 +55,13 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddSignalR();
 
 // Add application services
+builder.Services.AddSingleton<AuditLogService>();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
+builder.Services.AddScoped<SettingsService>();
 builder.Services.AddSingleton<AuthService>();
 
 var app = builder.Build();
@@ -99,5 +101,8 @@ else
     app.MapHub<CopilotHub>("/copilothub");
     app.MapHub<TestHub>("/testhub");
 }
+
+// Map SignalR Hub for settings management
+app.MapHub<SettingsHub>("/settingshub");
 
 app.Run();

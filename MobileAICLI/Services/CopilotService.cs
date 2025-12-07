@@ -9,7 +9,7 @@ public class CopilotService
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<CopilotService> _logger;
 
-    public CopilotService(IOptions<MobileAICLISettings> settings, ILogger<CopilotService> logger)
+    public CopilotService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotService> logger)
     {
         _settings = settings.Value;
         _logger = logger;
