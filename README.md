@@ -13,6 +13,8 @@ dotnet run
 
 Then navigate to http://localhost:5252
 
+최초 비밀번호 : admin
+
 ## Features
 
 - 🤖 **GitHub Copilot CLI Integration** - Ask AI to suggest or explain commands

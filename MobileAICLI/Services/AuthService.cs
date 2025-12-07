@@ -20,13 +20,15 @@ public class AuthService
     {
         _settings = settings.Value;
         _logger = logger;
-        
-        // Get password hash from environment variable
-        _passwordHash = Environment.GetEnvironmentVariable("MOBILEAICLI_PASSWORD_HASH");
-        
-        if (string.IsNullOrEmpty(_passwordHash) && _settings.EnableAuthentication)
+
+        // Prefer configured hash; fall back to a default "admin" password hash if missing.
+        _passwordHash = string.IsNullOrWhiteSpace(_settings.PasswordHash)
+            ? GeneratePasswordHash("admin")
+            : _settings.PasswordHash;
+
+        if (string.IsNullOrWhiteSpace(_settings.PasswordHash))
         {
-            _logger.LogWarning("Authentication is enabled but MOBILEAICLI_PASSWORD_HASH environment variable is not set. Authentication will fail.");
+            _logger.LogWarning("Password hash not configured; using default 'admin' password. Please change it immediately in Settings.");
         }
     }
 
