@@ -54,6 +54,9 @@
                 <button class="btn btn-xs btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)" title="Refresh">
                     🔄
                 </button>
+                <button class="btn btn-xs btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)" title="Clear">
+                    🗑️
+                </button>
             </div>
         </div>
         @if (!string.IsNullOrEmpty(statusError))
@@ -127,21 +130,6 @@
                 {
                     <span aria-label="Send">✈️</span>
                 }
-            </button>
-        </div>
-        <div class="mt-2 d-flex justify-content-between align-items-center px-1">
-            <small class="text-muted">
-                @if (isMobile)
-                {
-                    <span>Enter = newline</span>
-                }
-                else
-                {
-                    <span>Shift+Enter = newline</span>
-                }
-            </small>
-            <button class="btn btn-sm btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)">
-                Clear
             </button>
         </div>
     </div>
