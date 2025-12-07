@@ -4,6 +4,7 @@
 @using Microsoft.AspNetCore.Http
 @using MobileAICLI.Services
 @using MobileAICLI.Models
+@using MobileAICLI.Components.Layout
 @inject NavigationManager NavigationManager
 @inject LocalStorageService LocalStorage
 @inject IHttpContextAccessor HttpContextAccessor
@@ -13,11 +14,11 @@
 
 <PageTitle>GitHub Copilot</PageTitle>
 
-<div class="copilot-container d-flex flex-column" style="height: calc(100vh - 100px);">
-    @* Status bar *@
+<div class="copilot-container d-flex flex-column" style="height: calc(100vh - 60px);">
+    @* Copilot Status Bar integrated into page *@
     <div class="status-bar px-3 py-2 border-bottom bg-light">
-        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <div class="d-flex align-items-center gap-2">
+        <div class="copilot-status-bar">
+            <div class="copilot-status-info">
                 <span class="status-indicator @(isConnected ? "bg-success" : "bg-danger")"></span>
                 <small class="text-muted">
                     @if (isConnected)
@@ -38,11 +39,10 @@
                     }
                 </small>
             </div>
-            <div class="d-flex gap-2">
+            <div class="copilot-status-actions">
                 <button class="btn btn-sm btn-outline-secondary" @onclick="OpenSettings">
                     ⚙️ Settings
                 </button>
-            <div class="d-flex align-items-center gap-2">
                 <select class="form-select form-select-sm" style="width: auto;" 
                         @bind="selectedModel" 
                         disabled="@(!isConnected || isLoading)">
@@ -54,7 +54,6 @@
                 <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
                     <i class="bi bi-arrow-clockwise"></i> Check Status
                 </button>
-            </div>
             </div>
         </div>
         @if (!string.IsNullOrEmpty(statusError))
@@ -355,6 +354,7 @@
                     selectedModel = currentModel;
                 }
             }
+
         }
         catch (Exception ex)
         {
