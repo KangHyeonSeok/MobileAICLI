@@ -22,6 +22,7 @@ builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
+builder.Services.AddScoped<LocalStorageService>();
 
 var app = builder.Build();
 
