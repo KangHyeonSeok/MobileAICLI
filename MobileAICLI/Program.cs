@@ -65,6 +65,7 @@ builder.Services.AddScoped<CopilotStreamingService>();
 builder.Services.AddScoped<LocalStorageService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ToolDiscoveryService>();
 
 var app = builder.Build();
 

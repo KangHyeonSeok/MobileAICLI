@@ -7,8 +7,10 @@
 @using Microsoft.AspNetCore.Http
 @using System.Net
 @using MobileAICLI.Models
+@using MobileAICLI.Services
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
+@inject ToolDiscoveryService ToolDiscovery
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -35,6 +37,40 @@
 
     <div class="row">
         <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Tool Detection</h5>
+                    <button class="btn btn-sm btn-outline-primary" @onclick="DetectTools">Detect Now</button>
+                </div>
+                <div class="card-body">
+                    @if (_probeResult is null)
+                    {
+                        <div class="text-muted small">Run detection to check copilot/gh/git availability.</div>
+                    }
+                    else if (!string.IsNullOrEmpty(_probeResult.Error))
+                    {
+                        <div class="alert alert-warning" role="alert">@_probeResult.Error</div>
+                    }
+                    else
+                    {
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Copilot</label>
+                                @RenderToolStatus(_probeResult.CopilotPaths, v => _copilotCommand = v, "https://github.com/github/cli-copilot", _copilotCommand)
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">GitHub CLI</label>
+                                @RenderToolStatus(_probeResult.GhPaths, v => _ghCliPath = v, "https://cli.github.com/", _ghCliPath)
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Git</label>
+                                @RenderToolStatus(_probeResult.GitPaths, v => _gitCliPath = v, "https://git-scm.com/downloads", _gitCliPath)
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
             <div class="card mb-3">
                 <div class="card-header">
                     <h5>Path Configuration</h5>
@@ -236,6 +272,7 @@
     private bool _isSaving;
     private bool _isChangingPassword;
     private bool _hubStarted;
+    private ToolProbeResult? _probeResult;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -251,6 +288,7 @@
             if (authState?.User?.Identity?.IsAuthenticated == true)
             {
                 await EnsureHubAsync();
+                await DetectTools();
             }
             else
             {
@@ -295,6 +333,38 @@
         catch (Exception ex)
         {
             _errorMessage = $"Error connecting to settings hub: {ex.Message}";
+        }
+    }
+
+    private async Task DetectTools()
+    {
+        try
+        {
+            _probeResult = await ToolDiscovery.ProbeAsync();
+
+            // Pre-fill command paths when not set
+            if (_probeResult.CopilotPaths.Any() && string.IsNullOrWhiteSpace(_copilotCommand))
+            {
+                _copilotCommand = _probeResult.CopilotPaths.First();
+            }
+
+            if (_probeResult.GhPaths.Any() && string.IsNullOrWhiteSpace(_ghCliPath))
+            {
+                _ghCliPath = _probeResult.GhPaths.First();
+            }
+
+            if (_probeResult.GitPaths.Any() && string.IsNullOrWhiteSpace(_gitCliPath))
+            {
+                _gitCliPath = _probeResult.GitPaths.First();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Tool detection failed: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
         }
     }
 
@@ -463,5 +533,60 @@
             await _hubConnection.DisposeAsync();
         }
     }
+
+    private RenderFragment RenderToolStatus(List<string> paths, Action<string?> onSelect, string installUrl, string? currentValue) => builder =>
+    {
+        if (paths.Count == 0)
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "alert alert-warning p-2 mb-0");
+            builder.AddContent(2, "Not found");
+            builder.CloseElement();
+
+            builder.OpenElement(3, "a");
+            builder.AddAttribute(4, "href", installUrl);
+            builder.AddAttribute(5, "target", "_blank");
+            builder.AddAttribute(6, "class", "btn btn-sm btn-outline-secondary mt-2");
+            builder.AddContent(7, "Install / Guide");
+            builder.CloseElement();
+            return;
+        }
+
+        if (paths.Count == 1)
+        {
+            var single = paths[0];
+            builder.OpenElement(8, "div");
+            builder.AddAttribute(9, "class", "input-group input-group-sm");
+            builder.OpenElement(10, "input");
+            builder.AddAttribute(11, "class", "form-control");
+            builder.AddAttribute(12, "readonly", true);
+            builder.AddAttribute(13, "value", single);
+            builder.CloseElement();
+            builder.CloseElement();
+
+            onSelect(single);
+            return;
+        }
+
+        builder.OpenElement(14, "select");
+        builder.AddAttribute(15, "class", "form-select form-select-sm");
+        builder.AddAttribute(16, "value", currentValue ?? paths.First());
+        builder.AddAttribute(17, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+        {
+            var val = e.Value?.ToString();
+            onSelect(val);
+            StateHasChanged();
+        }));
+
+        foreach (var p in paths)
+        {
+            builder.OpenElement(18, "option");
+            builder.AddAttribute(19, "value", p);
+            builder.AddContent(20, p);
+            builder.CloseElement();
+        }
+
+        builder.CloseElement();
+    };
 }
 
