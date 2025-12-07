@@ -124,6 +124,7 @@ public class CopilotStreamingService
     public async IAsyncEnumerable<CopilotOutput> SendPromptStreamingAsync(
         string prompt,
         CopilotToolSettings? toolSettings = null,
+        string? model = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default,
         int timeoutSeconds = 120)
     {
@@ -139,14 +140,17 @@ public class CopilotStreamingService
 
         var channel = Channel.CreateUnbounded<CopilotOutput>();
 
+        // 모델 검증 및 기본값 설정
+        var validatedModel = ValidateAndGetModel(model);
+
         if (_settings.EnableCopilotMock)
         {
-            _ = ExecuteMockProcessAsync(prompt, channel.Writer, cancellationToken);
+            _ = ExecuteMockProcessAsync(prompt, validatedModel, channel.Writer, cancellationToken);
         }
         else
         {
             // 백그라운드에서 프로세스 실행
-            _ = ExecuteCopilotProcessAsync(prompt, toolSettings, channel.Writer, timeoutSeconds, cancellationToken);
+            _ = ExecuteCopilotProcessAsync(prompt, toolSettings, validatedModel, channel.Writer, timeoutSeconds, cancellationToken);
         }
 
         // 채널에서 결과 읽기
@@ -158,6 +162,7 @@ public class CopilotStreamingService
 
     private async Task ExecuteMockProcessAsync(
         string prompt,
+        string model,
         ChannelWriter<CopilotOutput> writer,
         CancellationToken cancellationToken)
     {
@@ -165,7 +170,7 @@ public class CopilotStreamingService
         {
             await Task.Delay(500, cancellationToken); // Thinking time
             
-            var mockResponse = $"[MOCK] Copilot response for: {prompt}\n\nThis is a simulated response because EnableCopilotMock is set to true.\n\n- Item 1\n- Item 2\n- Item 3";
+            var mockResponse = $"[MOCK] Copilot response (Model: {model}) for: {prompt}\n\nThis is a simulated response because EnableCopilotMock is set to true.\n\n- Item 1\n- Item 2\n- Item 3";
             
             // Simulate streaming
             foreach (var word in mockResponse.Split(' '))
@@ -190,6 +195,7 @@ public class CopilotStreamingService
     private async Task ExecuteCopilotProcessAsync(
         string prompt,
         CopilotToolSettings? toolSettings,
+        string model,
         ChannelWriter<CopilotOutput> writer,
         int timeoutSeconds,
         CancellationToken cancellationToken)
@@ -197,7 +203,7 @@ public class CopilotStreamingService
         Process? process = null;
         try
         {
-            var startInfo = CreateCopilotProcessStartInfo(prompt, toolSettings);
+            var startInfo = CreateCopilotProcessStartInfo(prompt, toolSettings, model);
             process = new Process { StartInfo = startInfo };
 
             process.Start();
@@ -275,7 +281,7 @@ public class CopilotStreamingService
         }
     }
 
-    private ProcessStartInfo CreateCopilotProcessStartInfo(string prompt, CopilotToolSettings? toolSettings)
+    private ProcessStartInfo CreateCopilotProcessStartInfo(string prompt, CopilotToolSettings? toolSettings, string model)
     {
         var executable = GetCopilotExecutable();
         
@@ -293,6 +299,13 @@ public class CopilotStreamingService
         startInfo.ArgumentList.Add("-p");
         startInfo.ArgumentList.Add(prompt);
         startInfo.ArgumentList.Add("--silent"); // 스크립팅용 출력 (응답만)
+        
+        // 모델 선택 (default가 아닌 경우에만 추가)
+        if (!string.IsNullOrEmpty(model) && model != "default")
+        {
+            startInfo.ArgumentList.Add("--model");
+            startInfo.ArgumentList.Add(model);
+        }
         
         // 작업 디렉토리 접근 허용
         startInfo.ArgumentList.Add("--add-dir");
@@ -370,6 +383,30 @@ public class CopilotStreamingService
         {
             return Environment.CurrentDirectory;
         }
+    }
+
+    /// <summary>
+    /// 모델 이름을 검증하고 허용된 모델이 아닌 경우 기본값 반환
+    /// </summary>
+    private string ValidateAndGetModel(string? model)
+    {
+        // 모델이 지정되지 않았거나 비어있으면 기본값 사용
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            return _settings.CopilotModel;
+        }
+
+        // 허용된 모델 목록에 있는지 확인
+        if (_settings.AllowedCopilotModels.Contains(model, StringComparer.OrdinalIgnoreCase))
+        {
+            return model;
+        }
+
+        // 허용되지 않은 모델인 경우 경고 로그와 함께 기본값 사용
+        _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+            model, _settings.CopilotModel);
+        
+        return _settings.CopilotModel;
     }
 
     private static string TruncateForLog(string text, int maxLength = 100)
