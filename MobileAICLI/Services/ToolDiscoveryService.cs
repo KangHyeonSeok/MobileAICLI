@@ -27,7 +27,13 @@ public class ToolDiscoveryService
                 return result;
             }
 
-            result.CopilotPaths = await RunProbeAsync(command.Value, "copilot", cancellationToken);
+            var copilotProbe = await RunProbeAsync(command.Value, "copilot", cancellationToken);
+            result.CopilotPaths = copilotProbe.Paths;
+            if (!string.IsNullOrEmpty(copilotProbe.Diagnostic))
+            {
+                result.Diagnostics["copilot"] = copilotProbe.Diagnostic;
+            }
+
             if (result.CopilotPaths.Count == 0)
             {
                 var npmPaths = await ProbeCopilotViaNpmAsync(cancellationToken);
@@ -38,10 +44,26 @@ public class ToolDiscoveryService
                         result.CopilotPaths.Add(p);
                     }
                 }
+
+                if (result.CopilotPaths.Count == 0)
+                {
+                    result.Diagnostics["copilot"] = "Copilot not found via which/where and npm global bin. Ensure npm global bin is on PATH or install Copilot CLI.";
+                }
             }
 
-            result.GhPaths = await RunProbeAsync(command.Value, "gh", cancellationToken);
-            result.GitPaths = await RunProbeAsync(command.Value, "git", cancellationToken);
+            var ghProbe = await RunProbeAsync(command.Value, "gh", cancellationToken);
+            result.GhPaths = ghProbe.Paths;
+            if (!string.IsNullOrEmpty(ghProbe.Diagnostic))
+            {
+                result.Diagnostics["gh"] = ghProbe.Diagnostic;
+            }
+
+            var gitProbe = await RunProbeAsync(command.Value, "git", cancellationToken);
+            result.GitPaths = gitProbe.Paths;
+            if (!string.IsNullOrEmpty(gitProbe.Diagnostic))
+            {
+                result.Diagnostics["git"] = gitProbe.Diagnostic;
+            }
         }
         catch (Exception ex)
         {
@@ -67,9 +89,10 @@ public class ToolDiscoveryService
         return null;
     }
 
-    private async Task<List<string>> RunProbeAsync((string FileName, string ArgumentPrefix) command, string toolName, CancellationToken cancellationToken)
+    private async Task<(List<string> Paths, string? Diagnostic)> RunProbeAsync((string FileName, string ArgumentPrefix) command, string toolName, CancellationToken cancellationToken)
     {
         var paths = new List<string>();
+        string? diagnostic = null;
 
         var psi = new ProcessStartInfo
         {
@@ -97,16 +120,25 @@ public class ToolDiscoveryService
                 var trimmed = line.Trim();
                 if (!string.IsNullOrEmpty(trimmed) && !paths.Contains(trimmed, StringComparer.OrdinalIgnoreCase))
                 {
-                    paths.Add(trimmed);
+                    if (File.Exists(trimmed))
+                    {
+                        paths.Add(trimmed);
+                    }
                 }
             }
         }
-        else if (!string.IsNullOrWhiteSpace(stderr))
+        else
         {
+            diagnostic = $"Probe '{command.FileName} {toolName}' exited {process.ExitCode}. Tool may not be in PATH for the server.";
             _logger.LogInformation("Probe for {Tool} returned exit {Code}: {Error}", toolName, process.ExitCode, stderr.Trim());
         }
 
-        return paths;
+        if (paths.Count == 0 && diagnostic is null)
+        {
+            diagnostic = $"Probe '{command.FileName} {toolName}' returned no results.";
+        }
+
+        return (paths, diagnostic);
     }
 
     private async Task<List<string>> ProbeCopilotViaNpmAsync(CancellationToken cancellationToken)

@@ -56,15 +56,15 @@
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Copilot</label>
-                                @RenderToolStatus(_probeResult.CopilotPaths, v => _copilotCommand = v, "https://github.com/github/cli-copilot", _copilotCommand)
+                                @RenderToolStatus(_probeResult.CopilotPaths, GetDiagnostic("copilot"), v => _copilotCommand = v, "https://github.com/github/cli-copilot", _copilotCommand)
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">GitHub CLI</label>
-                                @RenderToolStatus(_probeResult.GhPaths, v => _ghCliPath = v, "https://cli.github.com/", _ghCliPath)
+                                @RenderToolStatus(_probeResult.GhPaths, GetDiagnostic("gh"), v => _ghCliPath = v, "https://cli.github.com/", _ghCliPath)
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Git</label>
-                                @RenderToolStatus(_probeResult.GitPaths, v => _gitCliPath = v, "https://git-scm.com/downloads", _gitCliPath)
+                                @RenderToolStatus(_probeResult.GitPaths, GetDiagnostic("git"), v => _gitCliPath = v, "https://git-scm.com/downloads", _gitCliPath)
                             </div>
                         </div>
                     }
@@ -80,24 +80,6 @@
                         <label for="repoPath" class="form-label">Repository Path</label>
                         <input type="text" class="form-control" id="repoPath" @bind="_repositoryPath" />
                         <small class="form-text text-muted">Base path for file operations</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="copilotCmd" class="form-label">GitHub Copilot Command</label>
-                        <input type="text" class="form-control" id="copilotCmd" @bind="_copilotCommand" />
-                        <small class="form-text text-muted">Command to invoke GitHub Copilot CLI</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="ghPath" class="form-label">GitHub CLI Path</label>
-                        <input type="text" class="form-control" id="ghPath" @bind="_ghCliPath" />
-                        <small class="form-text text-muted">Path to gh CLI executable</small>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="gitPath" class="form-label">Git CLI Path</label>
-                        <input type="text" class="form-control" id="gitPath" @bind="_gitCliPath" />
-                        <small class="form-text text-muted">Path to git executable (default: git)</small>
                     </div>
                 </div>
             </div>
@@ -534,7 +516,17 @@
         }
     }
 
-    private RenderFragment RenderToolStatus(List<string> paths, Action<string?> onSelect, string installUrl, string? currentValue) => builder =>
+    private string? GetDiagnostic(string tool)
+    {
+        if (_probeResult != null && _probeResult.Diagnostics.TryGetValue(tool, out var msg))
+        {
+            return msg;
+        }
+
+        return null;
+    }
+
+    private RenderFragment RenderToolStatus(List<string> paths, string? diagnostic, Action<string?> onSelect, string installUrl, string? currentValue) => builder =>
     {
         if (paths.Count == 0)
         {
@@ -543,11 +535,19 @@
             builder.AddContent(2, "Not found");
             builder.CloseElement();
 
-            builder.OpenElement(3, "a");
-            builder.AddAttribute(4, "href", installUrl);
-            builder.AddAttribute(5, "target", "_blank");
-            builder.AddAttribute(6, "class", "btn btn-sm btn-outline-secondary mt-2");
-            builder.AddContent(7, "Install / Guide");
+            if (!string.IsNullOrWhiteSpace(diagnostic))
+            {
+                builder.OpenElement(3, "div");
+                builder.AddAttribute(4, "class", "text-muted small mt-1");
+                builder.AddContent(5, diagnostic);
+                builder.CloseElement();
+            }
+
+            builder.OpenElement(6, "a");
+            builder.AddAttribute(7, "href", installUrl);
+            builder.AddAttribute(8, "target", "_blank");
+            builder.AddAttribute(9, "class", "btn btn-sm btn-outline-secondary mt-2");
+            builder.AddContent(10, "Install / Guide");
             builder.CloseElement();
             return;
         }
@@ -555,12 +555,12 @@
         if (paths.Count == 1)
         {
             var single = paths[0];
-            builder.OpenElement(8, "div");
-            builder.AddAttribute(9, "class", "input-group input-group-sm");
-            builder.OpenElement(10, "input");
-            builder.AddAttribute(11, "class", "form-control");
-            builder.AddAttribute(12, "readonly", true);
-            builder.AddAttribute(13, "value", single);
+            builder.OpenElement(11, "div");
+            builder.AddAttribute(12, "class", "input-group input-group-sm");
+            builder.OpenElement(13, "input");
+            builder.AddAttribute(14, "class", "form-control");
+            builder.AddAttribute(15, "readonly", true);
+            builder.AddAttribute(16, "value", single);
             builder.CloseElement();
             builder.CloseElement();
 
@@ -568,10 +568,10 @@
             return;
         }
 
-        builder.OpenElement(14, "select");
-        builder.AddAttribute(15, "class", "form-select form-select-sm");
-        builder.AddAttribute(16, "value", currentValue ?? paths.First());
-        builder.AddAttribute(17, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+        builder.OpenElement(17, "select");
+        builder.AddAttribute(18, "class", "form-select form-select-sm");
+        builder.AddAttribute(19, "value", currentValue ?? paths.First());
+        builder.AddAttribute(20, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
         {
             var val = e.Value?.ToString();
             onSelect(val);
@@ -580,9 +580,9 @@
 
         foreach (var p in paths)
         {
-            builder.OpenElement(18, "option");
-            builder.AddAttribute(19, "value", p);
-            builder.AddContent(20, p);
+            builder.OpenElement(21, "option");
+            builder.AddAttribute(22, "value", p);
+            builder.AddContent(23, p);
             builder.CloseElement();
         }
 
