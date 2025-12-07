@@ -11,6 +11,7 @@
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 @inject ToolDiscoveryService ToolDiscovery
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -227,6 +228,39 @@
                     }
                 </div>
             </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Client Diagnostics</h5>
+                </div>
+                <div class="card-body">
+                    @if (_clientInfo is null)
+                    {
+                        <div class="text-muted small">Loading client info...</div>
+                    }
+                    else
+                    {
+                        <dl class="row small mb-0">
+                            <dt class="col-sm-5">innerWidth x innerHeight</dt>
+                            <dd class="col-sm-7">@_clientInfo.InnerWidth x @_clientInfo.InnerHeight</dd>
+                            <dt class="col-sm-5">devicePixelRatio</dt>
+                            <dd class="col-sm-7">@_clientInfo.DevicePixelRatio</dd>
+                            <dt class="col-sm-5">screen</dt>
+                            <dd class="col-sm-7">@_clientInfo.ScreenWidth x @_clientInfo.ScreenHeight</dd>
+                            <dt class="col-sm-5">orientation</dt>
+                            <dd class="col-sm-7">@_clientInfo.Orientation</dd>
+                            <dt class="col-sm-5">viewport meta</dt>
+                            <dd class="col-sm-7">@_clientInfo.ViewportMeta</dd>
+                            <dt class="col-sm-5">zoom approx</dt>
+                            <dd class="col-sm-7">@_clientInfo.Zoom</dd>
+                            <dt class="col-sm-5">language / platform</dt>
+                            <dd class="col-sm-7">@_clientInfo.Language / @_clientInfo.Platform</dd>
+                            <dt class="col-sm-5">userAgent</dt>
+                            <dd class="col-sm-7"><small>@_clientInfo.UserAgent</small></dd>
+                        </dl>
+                    }
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -255,6 +289,8 @@
     private bool _isChangingPassword;
     private bool _hubStarted;
     private ToolProbeResult? _probeResult;
+    private ClientInfo? _clientInfo;
+    private bool _clientInfoLoaded;
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
@@ -271,6 +307,7 @@
             {
                 await EnsureHubAsync();
                 await DetectTools();
+                await LoadClientInfo();
             }
             else
             {
@@ -508,6 +545,28 @@
         }
     }
 
+    private async Task LoadClientInfo()
+    {
+        if (_clientInfoLoaded)
+        {
+            return;
+        }
+
+        try
+        {
+            _clientInfo = await JS.InvokeAsync<ClientInfo>("clientInfo.get");
+            _clientInfoLoaded = true;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Client info load failed: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_hubConnection is not null)
@@ -524,6 +583,21 @@
         }
 
         return null;
+    }
+
+    private class ClientInfo
+    {
+        public double InnerWidth { get; set; }
+        public double InnerHeight { get; set; }
+        public double DevicePixelRatio { get; set; }
+        public double? ScreenWidth { get; set; }
+        public double? ScreenHeight { get; set; }
+        public string? Orientation { get; set; }
+        public string? UserAgent { get; set; }
+        public string? Language { get; set; }
+        public string? Platform { get; set; }
+        public string? ViewportMeta { get; set; }
+        public double? Zoom { get; set; }
     }
 
     private RenderFragment RenderToolStatus(List<string> paths, string? diagnostic, Action<string?> onSelect, string installUrl, string? currentValue) => builder =>
