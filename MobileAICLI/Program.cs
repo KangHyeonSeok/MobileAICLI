@@ -61,6 +61,7 @@ builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
+builder.Services.AddScoped<LocalStorageService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddSingleton<AuthService>();
 

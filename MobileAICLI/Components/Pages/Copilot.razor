@@ -2,7 +2,9 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
 @using MobileAICLI.Services
+@using MobileAICLI.Models
 @inject NavigationManager NavigationManager
+@inject LocalStorageService LocalStorage
 @implements IAsyncDisposable
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -34,6 +36,10 @@
                     }
                 </small>
             </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="OpenSettings">
+                    ⚙️ Settings
+                </button>
             <div class="d-flex align-items-center gap-2">
                 <select class="form-select form-select-sm" style="width: auto;" 
                         @bind="selectedModel" 
@@ -130,6 +136,12 @@
     </div>
 </div>
 
+@* 설정 패널 *@
+<CopilotSettingsPanel Settings="copilotSettings" 
+                      IsVisible="showSettingsPanel"
+                      OnSave="HandleSettingsSave"
+                      OnCancel="HandleSettingsCancel" />
+
 <style>
     .status-indicator {
         width: 8px;
@@ -175,13 +187,50 @@
     private string? statusError;
     private ElementReference chatContainer;
     private ChatMessage? currentStreamingMessage;
+    private CopilotSettings copilotSettings = new();
+    private bool showSettingsPanel = false;
     private string selectedModel = "default";
     private string currentModel = "default";
     private List<string> allowedModels = new() { "default" };
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSettings();
         await InitializeHubConnection();
+    }
+
+    private async Task LoadSettings()
+    {
+        var saved = await LocalStorage.GetItemAsync<CopilotSettings>("copilot-settings");
+        if (saved != null)
+        {
+            copilotSettings = saved;
+        }
+        else
+        {
+            // 기본값: Medium 프리셋
+            copilotSettings.ApplyPreset("medium");
+        }
+    }
+
+    private void OpenSettings()
+    {
+        showSettingsPanel = true;
+    }
+
+    private async Task HandleSettingsSave(CopilotSettings settings)
+    {
+        copilotSettings = settings;
+        await LocalStorage.SetItemAsync("copilot-settings", settings);
+        showSettingsPanel = false;
+        StateHasChanged();
+    }
+
+    private Task HandleSettingsCancel()
+    {
+        showSettingsPanel = false;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private async Task InitializeHubConnection()
@@ -333,6 +382,12 @@
 
         try
         {
+            // CopilotSettings를 CopilotToolSettings로 변환
+            var toolSettings = new CopilotToolSettings 
+            { 
+                CopilotSettings = copilotSettings 
+            };
+            await hubConnection.SendAsync("SendPrompt", prompt, toolSettings);
             // Validate selected model against allowed list
             var modelToUse = allowedModels.Contains(selectedModel) ? selectedModel : currentModel;
             await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null, modelToUse);

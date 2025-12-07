@@ -285,6 +285,10 @@ public class CopilotStreamingService
     {
         var executable = GetCopilotExecutable();
         
+        // 작업 디렉토리 결정
+        var workingDir = toolSettings?.CopilotSettings?.WorkingDirectory;
+        var finalWorkingDir = GetSafeWorkingDirectory(workingDir);
+        
         var startInfo = new ProcessStartInfo
         {
             FileName = executable,
@@ -292,7 +296,7 @@ public class CopilotStreamingService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = GetSafeWorkingDirectory()
+            WorkingDirectory = finalWorkingDir
         };
 
         // Programmatic mode: copilot -p "prompt" --silent
@@ -309,7 +313,7 @@ public class CopilotStreamingService
         
         // Allow working directory access
         startInfo.ArgumentList.Add("--add-dir");
-        startInfo.ArgumentList.Add(GetSafeWorkingDirectory());
+        startInfo.ArgumentList.Add(finalWorkingDir);
 
         // Apply tool settings
         if (toolSettings != null)
@@ -328,10 +332,36 @@ public class CopilotStreamingService
 
     private void ApplyToolSettings(ProcessStartInfo startInfo, CopilotToolSettings settings)
     {
+        // Phase 1.2: 상세 설정 적용
+        if (settings.CopilotSettings != null)
+        {
+            var copilotSettings = settings.CopilotSettings;
+            
+            // CLI 옵션 추가
+            var cliOptions = copilotSettings.BuildCliOptions();
+            if (!string.IsNullOrWhiteSpace(cliOptions))
+            {
+                // 공백으로 분리된 옵션들을 개별 인자로 추가
+                foreach (var option in SplitCliOptions(cliOptions))
+                {
+                    startInfo.ArgumentList.Add(option);
+                }
+            }
+            
+            // GitHub 토큰 환경변수 설정
+            var (tokenKey, tokenValue) = copilotSettings.GetGithubTokenEnv();
+            if (tokenKey != null)
+            {
+                startInfo.Environment[tokenKey] = tokenValue ?? string.Empty;
+            }
+            
+            return;
+        }
         // Apply options based on tool approval preset
         // Detailed implementation in Phase 1.2
         // Example: --allow-tool, --deny-tool, etc.
         
+        // 레거시: 프리셋 기반 설정
         if (!string.IsNullOrEmpty(settings.Preset))
         {
             switch (settings.Preset.ToLowerInvariant())
@@ -340,6 +370,11 @@ public class CopilotStreamingService
                     // Read-only - default, no additional options
                     break;
                 case "moderate":
+                    // 로컬 수정 허용
+                    break;
+                case "full":
+                    // 모든 도구 허용
+                    startInfo.ArgumentList.Add("--allow-all-tools");
                     // Allow local modifications
                     // startInfo.ArgumentList.Add("--allow-local-changes");
                     break;
@@ -349,6 +384,42 @@ public class CopilotStreamingService
                     break;
             }
         }
+    }
+    
+    private static string[] SplitCliOptions(string options)
+    {
+        // --allow-tool 'shell(cat)' --allow-tool 'write' 형태를 파싱
+        var result = new List<string>();
+        var current = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        
+        foreach (var ch in options)
+        {
+            if (ch == '\'')
+            {
+                inQuotes = !inQuotes;
+                current.Append(ch);
+            }
+            else if (ch == ' ' && !inQuotes)
+            {
+                if (current.Length > 0)
+                {
+                    result.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(ch);
+            }
+        }
+        
+        if (current.Length > 0)
+        {
+            result.Add(current.ToString());
+        }
+        
+        return result.ToArray();
     }
 
     private string GetCopilotExecutable()
@@ -366,13 +437,26 @@ public class CopilotStreamingService
         return command.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
     }
 
-    private string GetSafeWorkingDirectory()
+    private string GetSafeWorkingDirectory(string? customPath = null)
     {
         try
         {
+            // 커스텀 경로가 지정되었으면 우선 사용
+            if (!string.IsNullOrWhiteSpace(customPath) && Directory.Exists(customPath))
+            {
+                return customPath;
+            }
+            
             if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
             {
                 return _settings.RepositoryPath;
+            }
+
+            // OS별 기본 Documents 디렉토리
+            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrWhiteSpace(documentsPath) && Directory.Exists(documentsPath))
+            {
+                return documentsPath;
             }
 
             var fallback = Environment.CurrentDirectory;
@@ -451,4 +535,9 @@ public class CopilotToolSettings
     /// 차단된 도구 목록
     /// </summary>
     public List<string> DeniedTools { get; set; } = new();
+
+    /// <summary>
+    /// 상세 설정 (Phase 1.2)
+    /// </summary>
+    public MobileAICLI.Models.CopilotSettings? CopilotSettings { get; set; }
 }
