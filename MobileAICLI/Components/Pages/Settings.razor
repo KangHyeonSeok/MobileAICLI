@@ -1,8 +1,14 @@
 @page "/settings"
+@attribute [Authorize]
 @using System.Linq
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Http
+@using System.Net
 @using MobileAICLI.Models
 @inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -229,15 +235,67 @@
     private string? _successMessage;
     private bool _isSaving;
     private bool _isChangingPassword;
+    private bool _hubStarted;
 
-    protected override async Task OnInitializedAsync()
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        try
+        {
+            var authState = AuthenticationStateTask is not null
+                ? await AuthenticationStateTask
+                : null;
+
+            if (authState?.User?.Identity?.IsAuthenticated == true)
+            {
+                await EnsureHubAsync();
+            }
+            else
+            {
+                _errorMessage = "Authentication is required to load settings.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error initializing settings: {ex.Message}";
+        }
+        finally
+        {
+            StateHasChanged();
+        }
+    }
+
+    private async Task EnsureHubAsync()
+    {
+        if (_hubStarted)
+        {
+            return;
+        }
+
+        var cookieHeader = HttpContextAccessor.HttpContext?.Request?.Headers?["Cookie"].ToString();
+
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(Navigation.ToAbsoluteUri("/settingshub"))
+            .WithUrl(Navigation.ToAbsoluteUri("/settingshub"), options =>
+            {
+                if (!string.IsNullOrEmpty(cookieHeader))
+                {
+                    options.Headers.Add("Cookie", cookieHeader);
+                }
+            })
             .Build();
 
-        await _hubConnection.StartAsync();
-        await LoadSettings();
+        try
+        {
+            await _hubConnection.StartAsync();
+            _hubStarted = true;
+            await LoadSettings();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error connecting to settings hub: {ex.Message}";
+        }
     }
 
     private async Task LoadSettings()

@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.AspNetCore.Authorization;
 using MobileAICLI.Models;
 using MobileAICLI.Services;
 
 namespace MobileAICLI.Hubs;
 
+[Authorize]
 public class SettingsHub : Hub
 {
     private readonly SettingsService _settingsService;

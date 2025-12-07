@@ -1,10 +1,12 @@
 @page "/copilot"
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Http
 @using MobileAICLI.Services
 @using MobileAICLI.Models
 @inject NavigationManager NavigationManager
 @inject LocalStorageService LocalStorage
+@inject IHttpContextAccessor HttpContextAccessor
 @implements IAsyncDisposable
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -236,8 +238,16 @@
 
     private async Task InitializeHubConnection()
     {
+        var cookieHeader = HttpContextAccessor.HttpContext?.Request?.Headers?["Cookie"].ToString();
+
         hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/copilothub"))
+            .WithUrl(NavigationManager.ToAbsoluteUri("/copilothub"), options =>
+            {
+                if (!string.IsNullOrEmpty(cookieHeader))
+                {
+                    options.Headers.Add("Cookie", cookieHeader);
+                }
+            })
             .WithAutomaticReconnect()
             .Build();
 

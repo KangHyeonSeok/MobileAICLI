@@ -64,7 +64,7 @@ builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
 builder.Services.AddScoped<LocalStorageService>();
 builder.Services.AddScoped<SettingsService>();
-builder.Services.AddSingleton<AuthService>();
+builder.Services.AddScoped<AuthService>();
 
 var app = builder.Build();
 
@@ -105,6 +105,13 @@ else
 }
 
 // Map SignalR Hub for settings management
-app.MapHub<SettingsHub>("/settingshub");
+if (settings.EnableAuthentication)
+{
+    app.MapHub<SettingsHub>("/settingshub").RequireAuthorization();
+}
+else
+{
+    app.MapHub<SettingsHub>("/settingshub");
+}
 
 app.Run();

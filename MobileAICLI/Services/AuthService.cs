@@ -11,22 +11,23 @@ namespace MobileAICLI.Services;
 /// </summary>
 public class AuthService
 {
-    private readonly MobileAICLISettings _settings;
+    private readonly IOptionsSnapshot<MobileAICLISettings> _settings;
     private readonly ILogger<AuthService> _logger;
     private readonly Dictionary<string, LoginAttemptInfo> _loginAttempts = new();
     private readonly string? _passwordHash;
+    private static readonly string DefaultAdminHash = GeneratePasswordHash("admin");
 
-    public AuthService(IOptions<MobileAICLISettings> settings, ILogger<AuthService> logger, IConfiguration configuration)
+    public AuthService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<AuthService> logger, IConfiguration configuration)
     {
-        _settings = settings.Value;
+        _settings = settings;
         _logger = logger;
 
         // Prefer configured hash; fall back to a default "admin" password hash if missing.
-        _passwordHash = string.IsNullOrWhiteSpace(_settings.PasswordHash)
-            ? GeneratePasswordHash("admin")
-            : _settings.PasswordHash;
+        _passwordHash = string.IsNullOrWhiteSpace(_settings.Value.PasswordHash)
+            ? DefaultAdminHash
+            : _settings.Value.PasswordHash;
 
-        if (string.IsNullOrWhiteSpace(_settings.PasswordHash))
+        if (string.IsNullOrWhiteSpace(_settings.Value.PasswordHash))
         {
             _logger.LogWarning("Password hash not configured; using default 'admin' password. Please change it immediately in Settings.");
         }
@@ -34,7 +35,7 @@ public class AuthService
 
     public bool IsAuthenticationEnabled()
     {
-        return _settings.EnableAuthentication && !string.IsNullOrEmpty(_passwordHash);
+        return _settings.Value.EnableAuthentication && !string.IsNullOrEmpty(_passwordHash);
     }
 
     public async Task<(bool Success, string? ErrorMessage)> ValidatePasswordAsync(string password, string ipAddress)
@@ -68,7 +69,7 @@ public class AuthService
             RecordFailedAttempt(ipAddress);
             
             // Add delay to slow down brute force attacks
-            await Task.Delay(TimeSpan.FromSeconds(_settings.FailedLoginDelaySeconds));
+            await Task.Delay(TimeSpan.FromSeconds(_settings.Value.FailedLoginDelaySeconds));
             
             _logger.LogWarning("Failed login attempt from IP: {IpAddress}", MaskIpAddress(ipAddress));
             return (false, "Invalid password");
@@ -113,13 +114,13 @@ public class AuthService
         }
 
         // Reset if last attempt was more than configured minutes ago
-        if (DateTime.UtcNow - info.LastAttempt > TimeSpan.FromMinutes(_settings.RateLimitResetMinutes))
+        if (DateTime.UtcNow - info.LastAttempt > TimeSpan.FromMinutes(_settings.Value.RateLimitResetMinutes))
         {
             _loginAttempts.Remove(ipAddress);
             return false;
         }
 
-        return info.FailedAttempts >= _settings.MaxFailedLoginAttempts;
+        return info.FailedAttempts >= _settings.Value.MaxFailedLoginAttempts;
     }
 
     private void RecordFailedAttempt(string ipAddress)

@@ -291,55 +291,30 @@ public class SettingsService
 
     private string HashPassword(string password)
     {
-        // Use PBKDF2 with HMACSHA256
-        const int saltSize = 16;
-        const int hashSize = 32;
+        // Reuse AuthService format: pbkdf2$iterations$salt$hash (SHA-256)
         const int iterations = 100000;
-
-        using var rng = RandomNumberGenerator.Create();
-        var salt = new byte[saltSize];
-        rng.GetBytes(salt);
-
-        using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256);
-        var hash = pbkdf2.GetBytes(hashSize);
-
-        var hashBytes = new byte[saltSize + hashSize];
-        Array.Copy(salt, 0, hashBytes, 0, saltSize);
-        Array.Copy(hash, 0, hashBytes, saltSize, hashSize);
-
-        return Convert.ToBase64String(hashBytes);
+        return AuthService.GeneratePasswordHash(password, iterations);
     }
 
     private bool VerifyPassword(string password, string passwordHash)
     {
         try
         {
-            const int saltSize = 16;
-            const int hashSize = 32;
-            const int iterations = 100000;
+            var parts = passwordHash.Split('$');
 
-            var hashBytes = Convert.FromBase64String(passwordHash);
-            
-            if (hashBytes.Length != saltSize + hashSize)
+            if (parts.Length != 4 || parts[0] != "pbkdf2")
             {
                 return false;
             }
 
-            var salt = new byte[saltSize];
-            Array.Copy(hashBytes, 0, salt, 0, saltSize);
+            int iterations = int.Parse(parts[1]);
+            byte[] salt = Convert.FromBase64String(parts[2]);
+            byte[] expectedHash = Convert.FromBase64String(parts[3]);
 
             using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256);
-            var hash = pbkdf2.GetBytes(hashSize);
+            byte[] actualHash = pbkdf2.GetBytes(expectedHash.Length);
 
-            for (int i = 0; i < hashSize; i++)
-            {
-                if (hashBytes[i + saltSize] != hash[i])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return CryptographicOperations.FixedTimeEquals(expectedHash, actualHash);
         }
         catch
         {
