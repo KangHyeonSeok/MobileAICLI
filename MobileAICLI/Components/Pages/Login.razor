@@ -1,0 +1,143 @@
+@page "/login"
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using System.Security.Claims
+@using MobileAICLI.Services
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Login - MobileAICLI</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">
+                        <i class="bi bi-shield-lock"></i> MobileAICLI Login
+                    </h3>
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+
+                    <EditForm Model="@_loginModel" OnValidSubmit="HandleLogin">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="password" 
+                                   @bind="_loginModel.Password"
+                                   disabled="@_isLoading"
+                                   placeholder="Enter password" />
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" 
+                                    class="btn btn-primary" 
+                                    disabled="@_isLoading">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Authenticating...</span>
+                                }
+                                else
+                                {
+                                    <span>Login</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-3" role="alert">
+                <small>
+                    <strong>Note:</strong> Set the <code>MOBILEAICLI_PASSWORD_HASH</code> environment variable to configure authentication.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel _loginModel = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private async Task HandleLogin()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            var httpContext = HttpContextAccessor.HttpContext;
+            if (httpContext == null)
+            {
+                _errorMessage = "Authentication error. Please try again.";
+                return;
+            }
+
+            var ipAddress = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+            var (success, errorMessage) = await AuthService.ValidatePasswordAsync(_loginModel.Password, ipAddress);
+
+            if (success)
+            {
+                // Create claims for the authenticated user
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, "admin"),
+                    new Claim(ClaimTypes.Role, "Administrator"),
+                    new Claim("AuthenticatedAt", DateTime.UtcNow.ToString("O"))
+                };
+
+                var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+                var authProperties = new AuthenticationProperties
+                {
+                    IsPersistent = false, // Session cookie (deleted when browser closes)
+                    ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30),
+                    AllowRefresh = true
+                };
+
+                await httpContext.SignInAsync(
+                    CookieAuthenticationDefaults.AuthenticationScheme,
+                    new ClaimsPrincipal(claimsIdentity),
+                    authProperties);
+
+                // Redirect to return URL or home
+                var redirectUrl = string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl;
+                Navigation.NavigateTo(redirectUrl, forceLoad: true);
+            }
+            else
+            {
+                _errorMessage = errorMessage ?? "Authentication failed";
+            }
+        }
+        catch (Exception)
+        {
+            _errorMessage = "An error occurred during authentication";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private class LoginModel
+    {
+        public string Password { get; set; } = string.Empty;
+    }
+}

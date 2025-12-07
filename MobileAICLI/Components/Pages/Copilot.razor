@@ -1,8 +1,10 @@
 @page "/copilot"
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
 @using MobileAICLI.Services
 @inject NavigationManager NavigationManager
 @implements IAsyncDisposable
+@attribute [Authorize]
 @rendermode InteractiveServer
 
 <PageTitle>GitHub Copilot</PageTitle>
