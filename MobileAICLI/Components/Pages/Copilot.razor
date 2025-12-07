@@ -232,7 +232,7 @@
     }
 
     /* Mobile overrides */
-    @media (max-width: 1080px), (pointer: coarse) {
+    @@media (max-width: 1080px), (pointer: coarse) {
         /* Fix Title Bar Buttons */
         .copilot-status-actions .btn {
             width: auto !important;
@@ -259,6 +259,8 @@
             margin-bottom: 0 !important; /* Remove bottom margin if any */
         }
     }
+
+</style>
 
 @code {
     private HubConnection? hubConnection;
