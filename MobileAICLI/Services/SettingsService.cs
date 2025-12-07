@@ -89,9 +89,13 @@ public class SettingsService
             {
                 foreach (var root in request.AllowedWorkRoots)
                 {
-                    if (!Directory.Exists(root.Replace("*", "")))
+                    // Extract base path before any wildcard
+                    var basePath = root.Contains('*') ? root.Substring(0, root.IndexOf('*')) : root;
+                    basePath = basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    
+                    if (!Directory.Exists(basePath))
                     {
-                        _logger.LogWarning("Allowed work root may not exist: {Root}", root);
+                        _logger.LogWarning("Allowed work root base path may not exist: {Root}", basePath);
                     }
                 }
             }
@@ -104,97 +108,74 @@ public class SettingsService
                 return result;
             }
 
-            // Read current settings file
-            var settingsJson = await File.ReadAllTextAsync(_settingsFilePath);
-            var settingsDoc = JsonDocument.Parse(settingsJson);
-            
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+            // Update settings file
+            var updatedJson = await UpdateJsonSettingAsync((mobileAICLI, writer) =>
             {
-                writer.WriteStartObject();
-                
-                foreach (var property in settingsDoc.RootElement.EnumerateObject())
+                foreach (var settingProp in mobileAICLI.EnumerateObject())
                 {
-                    if (property.Name == "MobileAICLI")
+                    var propName = settingProp.Name;
+                    
+                    if (propName == "RepositoryPath" && request.RepositoryPath != null)
                     {
-                        writer.WritePropertyName("MobileAICLI");
-                        writer.WriteStartObject();
-                        
-                        foreach (var settingProp in property.Value.EnumerateObject())
+                        writer.WriteString(propName, request.RepositoryPath);
+                    }
+                    else if (propName == "GitHubCopilotCommand" && request.GitHubCopilotCommand != null)
+                    {
+                        writer.WriteString(propName, request.GitHubCopilotCommand);
+                    }
+                    else if (propName == "GitHubCliPath" && request.GitHubCliPath != null)
+                    {
+                        writer.WriteString(propName, request.GitHubCliPath);
+                    }
+                    else if (propName == "GitCliPath" && request.GitCliPath != null)
+                    {
+                        writer.WriteString(propName, request.GitCliPath);
+                    }
+                    else if (propName == "AllowedShellCommands" && request.AllowedShellCommands != null)
+                    {
+                        writer.WritePropertyName(propName);
+                        writer.WriteStartArray();
+                        foreach (var cmd in request.AllowedShellCommands)
                         {
-                            var propName = settingProp.Name;
-                            
-                            if (propName == "RepositoryPath" && request.RepositoryPath != null)
-                            {
-                                writer.WriteString(propName, request.RepositoryPath);
-                            }
-                            else if (propName == "GitHubCopilotCommand" && request.GitHubCopilotCommand != null)
-                            {
-                                writer.WriteString(propName, request.GitHubCopilotCommand);
-                            }
-                            else if (propName == "GitHubCliPath" && request.GitHubCliPath != null)
-                            {
-                                writer.WriteString(propName, request.GitHubCliPath);
-                            }
-                            else if (propName == "GitCliPath" && request.GitCliPath != null)
-                            {
-                                writer.WriteString(propName, request.GitCliPath);
-                            }
-                            else if (propName == "AllowedShellCommands" && request.AllowedShellCommands != null)
-                            {
-                                writer.WritePropertyName(propName);
-                                writer.WriteStartArray();
-                                foreach (var cmd in request.AllowedShellCommands)
-                                {
-                                    writer.WriteStringValue(cmd);
-                                }
-                                writer.WriteEndArray();
-                            }
-                            else if (propName == "AllowedWorkRoots" && request.AllowedWorkRoots != null)
-                            {
-                                writer.WritePropertyName(propName);
-                                writer.WriteStartArray();
-                                foreach (var root in request.AllowedWorkRoots)
-                                {
-                                    writer.WriteStringValue(root);
-                                }
-                                writer.WriteEndArray();
-                            }
-                            else
-                            {
-                                // Copy existing value
-                                settingProp.WriteTo(writer);
-                            }
+                            writer.WriteStringValue(cmd);
                         }
-                        
-                        // Add new properties if they don't exist
-                        if (request.GitCliPath != null && !property.Value.TryGetProperty("GitCliPath", out _))
+                        writer.WriteEndArray();
+                    }
+                    else if (propName == "AllowedWorkRoots" && request.AllowedWorkRoots != null)
+                    {
+                        writer.WritePropertyName(propName);
+                        writer.WriteStartArray();
+                        foreach (var root in request.AllowedWorkRoots)
                         {
-                            writer.WriteString("GitCliPath", request.GitCliPath);
+                            writer.WriteStringValue(root);
                         }
-                        if (request.AllowedWorkRoots != null && !property.Value.TryGetProperty("AllowedWorkRoots", out _))
-                        {
-                            writer.WritePropertyName("AllowedWorkRoots");
-                            writer.WriteStartArray();
-                            foreach (var root in request.AllowedWorkRoots)
-                            {
-                                writer.WriteStringValue(root);
-                            }
-                            writer.WriteEndArray();
-                        }
-                        
-                        writer.WriteEndObject();
+                        writer.WriteEndArray();
                     }
                     else
                     {
-                        property.WriteTo(writer);
+                        settingProp.WriteTo(writer);
                     }
                 }
                 
-                writer.WriteEndObject();
-            }
+                // Add new properties if they don't exist
+                if (request.GitCliPath != null && !mobileAICLI.TryGetProperty("GitCliPath", out _))
+                {
+                    writer.WriteString("GitCliPath", request.GitCliPath);
+                }
+                if (request.AllowedWorkRoots != null && !mobileAICLI.TryGetProperty("AllowedWorkRoots", out _))
+                {
+                    writer.WritePropertyName("AllowedWorkRoots");
+                    writer.WriteStartArray();
+                    foreach (var root in request.AllowedWorkRoots)
+                    {
+                        writer.WriteStringValue(root);
+                    }
+                    writer.WriteEndArray();
+                }
+                
+                return Task.CompletedTask;
+            });
             
-            var updatedJson = Encoding.UTF8.GetString(stream.ToArray());
             await File.WriteAllTextAsync(_settingsFilePath, updatedJson);
             
             _logger.LogInformation("Settings updated successfully");
@@ -266,52 +247,30 @@ public class SettingsService
             // Update settings with new hash
             var updateRequest = new SettingsUpdateRequest();
             
-            // Read and update the settings file with new password hash
-            var settingsJson = await File.ReadAllTextAsync(_settingsFilePath);
-            var settingsDoc = JsonDocument.Parse(settingsJson);
-            
-            using var stream = new MemoryStream();
-            using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+            // Update settings file with new password hash
+            var updatedJson = await UpdateJsonSettingAsync((mobileAICLI, writer) =>
             {
-                writer.WriteStartObject();
-                
-                foreach (var property in settingsDoc.RootElement.EnumerateObject())
+                foreach (var settingProp in mobileAICLI.EnumerateObject())
                 {
-                    if (property.Name == "MobileAICLI")
+                    if (settingProp.Name == "PasswordHash")
                     {
-                        writer.WritePropertyName("MobileAICLI");
-                        writer.WriteStartObject();
-                        
-                        foreach (var settingProp in property.Value.EnumerateObject())
-                        {
-                            if (settingProp.Name == "PasswordHash")
-                            {
-                                writer.WriteString("PasswordHash", newHash);
-                            }
-                            else
-                            {
-                                settingProp.WriteTo(writer);
-                            }
-                        }
-                        
-                        // Add PasswordHash if it doesn't exist
-                        if (!property.Value.TryGetProperty("PasswordHash", out _))
-                        {
-                            writer.WriteString("PasswordHash", newHash);
-                        }
-                        
-                        writer.WriteEndObject();
+                        writer.WriteString("PasswordHash", newHash);
                     }
                     else
                     {
-                        property.WriteTo(writer);
+                        settingProp.WriteTo(writer);
                     }
                 }
                 
-                writer.WriteEndObject();
-            }
+                // Add PasswordHash if it doesn't exist
+                if (!mobileAICLI.TryGetProperty("PasswordHash", out _))
+                {
+                    writer.WriteString("PasswordHash", newHash);
+                }
+                
+                return Task.CompletedTask;
+            });
             
-            var updatedJson = Encoding.UTF8.GetString(stream.ToArray());
             await File.WriteAllTextAsync(_settingsFilePath, updatedJson);
             
             _logger.LogInformation("Password changed successfully");
@@ -388,6 +347,39 @@ public class SettingsService
         }
     }
 
+    private async Task<string> UpdateJsonSettingAsync(Func<JsonElement, Utf8JsonWriter, Task> updateMobileAICLISection)
+    {
+        var settingsJson = await File.ReadAllTextAsync(_settingsFilePath);
+        var settingsDoc = JsonDocument.Parse(settingsJson);
+        
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+            
+            foreach (var property in settingsDoc.RootElement.EnumerateObject())
+            {
+                if (property.Name == "MobileAICLI")
+                {
+                    writer.WritePropertyName("MobileAICLI");
+                    writer.WriteStartObject();
+                    
+                    await updateMobileAICLISection(property.Value, writer);
+                    
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    property.WriteTo(writer);
+                }
+            }
+            
+            writer.WriteEndObject();
+        }
+        
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
     private bool IsCommandInPath(string command)
     {
         var pathVar = Environment.GetEnvironmentVariable("PATH");
@@ -397,12 +389,19 @@ public class SettingsService
         }
 
         var paths = pathVar.Split(Path.PathSeparator);
+        var extensions = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? new[] { "", ".exe", ".cmd", ".bat", ".com" }
+            : new[] { "" };
+
         foreach (var path in paths)
         {
-            var fullPath = Path.Combine(path, command);
-            if (File.Exists(fullPath))
+            foreach (var ext in extensions)
             {
-                return true;
+                var fullPath = Path.Combine(path, command + ext);
+                if (File.Exists(fullPath))
+                {
+                    return true;
+                }
             }
         }
 
