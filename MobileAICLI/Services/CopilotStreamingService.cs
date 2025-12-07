@@ -15,7 +15,7 @@ public class CopilotStreamingService
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<CopilotStreamingService> _logger;
 
-    public CopilotStreamingService(IOptions<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
+    public CopilotStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
     {
         _settings = settings.Value;
         _logger = logger;

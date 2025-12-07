@@ -22,6 +22,7 @@ builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
 builder.Services.AddScoped<ShellStreamingService>();
 builder.Services.AddScoped<CopilotStreamingService>();
+builder.Services.AddScoped<SettingsService>();
 
 var app = builder.Build();
 
@@ -45,5 +46,8 @@ app.MapHub<CopilotHub>("/copilothub");
 
 // Map SignalR Hub for integration testing
 app.MapHub<TestHub>("/testhub");
+
+// Map SignalR Hub for settings management
+app.MapHub<SettingsHub>("/settingshub");
 
 app.Run();

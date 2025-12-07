@@ -8,7 +8,7 @@ public class FileService
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<FileService> _logger;
 
-    public FileService(IOptions<MobileAICLISettings> settings, ILogger<FileService> logger)
+    public FileService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<FileService> logger)
     {
         _settings = settings.Value;
         _logger = logger;
