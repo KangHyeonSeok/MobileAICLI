@@ -78,7 +78,8 @@ h1:focus {
     .btn {
         min-height: 52px;
         padding: 14px 22px;
-        font-size: 17px;
+        font-size: 18px;
+        line-height: 1.35;
         width: 100%;
         margin-bottom: 0.5rem;
     }
@@ -96,13 +97,15 @@ h1:focus {
     /* Touch-friendly form controls */
     .form-control, textarea.form-control {
         min-height: 52px;
-        font-size: 17px;
+        font-size: 18px;
+        line-height: 1.35;
         padding: 14px;
     }
 
     .form-select {
         min-height: 52px;
-        font-size: 17px;
+        font-size: 18px;
+        line-height: 1.35;
     }
 
     /* Larger icons for mobile */
