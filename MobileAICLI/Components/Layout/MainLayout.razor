@@ -17,7 +17,7 @@
         <div class="sidebar-overlay" @onclick="CloseSidebar"></div>
     }
 
-    <main>
+    <main style="@(IsCopilotPage() ? "padding-top: 0" : "")">
         @* Top bar - conditionally rendered based on current page *@
         @if (IsSettingsPage())
         {
@@ -42,7 +42,7 @@
                 </AuthorizeView>
             </div>
         }
-        <article class="content px-4">
+        <article class="@(IsCopilotPage() ? "content-copilot" : "content px-4")">
             @Body
         </article>
     </main>
@@ -88,6 +88,13 @@
         var pathOnly = path.Split('?', '#')[0];
         return pathOnly.Equals("settings", StringComparison.OrdinalIgnoreCase) ||
                pathOnly.StartsWith("settings/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsCopilotPage()
+    {
+        var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var pathOnly = path.Split('?', '#')[0].TrimEnd('/');
+        return pathOnly.Equals("copilot", StringComparison.OrdinalIgnoreCase);
     }
 
     public void Dispose()
