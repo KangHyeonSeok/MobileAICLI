@@ -13,11 +13,13 @@ namespace MobileAICLI.Services;
 public class CopilotStreamingService
 {
     private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<CopilotStreamingService> _logger;
 
-    public CopilotStreamingService(IOptions<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
+    public CopilotStreamingService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotStreamingService> logger)
     {
         _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -357,13 +359,15 @@ public class CopilotStreamingService
     {
         try
         {
-            if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
+            var workingDir = _context.GetAbsolutePath();
+            
+            if (Directory.Exists(workingDir))
             {
-                return _settings.RepositoryPath;
+                return workingDir;
             }
 
             var fallback = Environment.CurrentDirectory;
-            _logger.LogWarning("RepositoryPath does not exist. Using fallback working directory: {WorkingDirectory}", fallback);
+            _logger.LogWarning("Context working directory does not exist. Using fallback: {WorkingDirectory}", fallback);
             return fallback;
         }
         catch

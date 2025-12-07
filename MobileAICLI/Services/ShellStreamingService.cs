@@ -11,12 +11,12 @@ namespace MobileAICLI.Services;
 /// </summary>
 public class ShellStreamingService
 {
-    private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<ShellStreamingService> _logger;
 
-    public ShellStreamingService(IOptions<MobileAICLISettings> settings, ILogger<ShellStreamingService> logger)
+    public ShellStreamingService(RepositoryContext context, ILogger<ShellStreamingService> logger)
     {
-        _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -140,7 +140,7 @@ public class ShellStreamingService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = _settings.RepositoryPath
+            WorkingDirectory = _context.GetAbsolutePath()
         };
 
         // OS에 따라 쉘 설정

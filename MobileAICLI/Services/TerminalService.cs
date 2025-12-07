@@ -7,11 +7,13 @@ namespace MobileAICLI.Services;
 public class TerminalService
 {
     private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<TerminalService> _logger;
 
-    public TerminalService(IOptions<MobileAICLISettings> settings, ILogger<TerminalService> logger)
+    public TerminalService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<TerminalService> logger)
     {
         _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -37,7 +39,7 @@ public class TerminalService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _settings.RepositoryPath
+                WorkingDirectory = _context.GetAbsolutePath()
             };
 
             // Use ArgumentList for safer command execution

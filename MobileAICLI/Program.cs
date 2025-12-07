@@ -17,6 +17,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSignalR();
 
 // Add application services
+builder.Services.AddScoped<RepositoryContext>();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TerminalService>();
 builder.Services.AddScoped<CopilotService>();
