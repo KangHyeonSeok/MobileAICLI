@@ -1,0 +1,410 @@
+using Microsoft.Extensions.Options;
+using MobileAICLI.Models;
+using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
+
+namespace MobileAICLI.Services;
+
+public class SettingsService
+{
+    private readonly IOptionsSnapshot<MobileAICLISettings> _settings;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<SettingsService> _logger;
+    private readonly AuditLogService _auditLog;
+    private readonly string _settingsFilePath;
+
+    public SettingsService(
+        IOptionsSnapshot<MobileAICLISettings> settings, 
+        IConfiguration configuration,
+        ILogger<SettingsService> logger,
+        AuditLogService auditLog,
+        IWebHostEnvironment env)
+    {
+        _settings = settings;
+        _configuration = configuration;
+        _logger = logger;
+        _auditLog = auditLog;
+        _settingsFilePath = Path.Combine(env.ContentRootPath, "appsettings.json");
+    }
+
+    public MobileAICLISettings GetCurrentSettings()
+    {
+        return _settings.Value;
+    }
+
+    public async Task<SettingsUpdateResult> UpdateSettingsAsync(SettingsUpdateRequest request)
+    {
+        var result = new SettingsUpdateResult();
+        var validationErrors = new List<string>();
+
+        try
+        {
+            // Validate settings
+            if (request.RepositoryPath != null)
+            {
+                if (!Directory.Exists(request.RepositoryPath))
+                {
+                    validationErrors.Add($"Repository path does not exist: {request.RepositoryPath}");
+                }
+            }
+
+            if (request.GitHubCopilotCommand != null)
+            {
+                if (string.IsNullOrWhiteSpace(request.GitHubCopilotCommand))
+                {
+                    validationErrors.Add("GitHub Copilot command cannot be empty");
+                }
+            }
+
+            if (request.GitHubCliPath != null)
+            {
+                if (!File.Exists(request.GitHubCliPath) && !IsCommandInPath(request.GitHubCliPath))
+                {
+                    validationErrors.Add($"GitHub CLI path not found: {request.GitHubCliPath}");
+                }
+            }
+
+            if (request.GitCliPath != null)
+            {
+                if (!File.Exists(request.GitCliPath) && !IsCommandInPath(request.GitCliPath))
+                {
+                    validationErrors.Add($"Git CLI path not found: {request.GitCliPath}");
+                }
+            }
+
+            if (request.AllowedShellCommands != null)
+            {
+                var dangerousCommands = new[] { "rm -rf", "dd", "mkfs", ":(){ :|:& };:" };
+                foreach (var cmd in request.AllowedShellCommands)
+                {
+                    if (dangerousCommands.Any(d => cmd.Contains(d, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        validationErrors.Add($"Dangerous command not allowed: {cmd}");
+                    }
+                }
+            }
+
+            if (request.AllowedWorkRoots != null)
+            {
+                foreach (var root in request.AllowedWorkRoots)
+                {
+                    // Extract base path before any wildcard
+                    var basePath = root.Contains('*') ? root.Substring(0, root.IndexOf('*')) : root;
+                    basePath = basePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    
+                    if (!Directory.Exists(basePath))
+                    {
+                        _logger.LogWarning("Allowed work root base path may not exist: {Root}", basePath);
+                    }
+                }
+            }
+
+            if (validationErrors.Any())
+            {
+                result.Success = false;
+                result.ValidationErrors = validationErrors;
+                result.Message = "Validation failed";
+                return result;
+            }
+
+            // Update settings file
+            var updatedJson = await UpdateJsonSettingAsync((mobileAICLI, writer) =>
+            {
+                foreach (var settingProp in mobileAICLI.EnumerateObject())
+                {
+                    var propName = settingProp.Name;
+                    
+                    if (propName == "RepositoryPath" && request.RepositoryPath != null)
+                    {
+                        writer.WriteString(propName, request.RepositoryPath);
+                    }
+                    else if (propName == "GitHubCopilotCommand" && request.GitHubCopilotCommand != null)
+                    {
+                        writer.WriteString(propName, request.GitHubCopilotCommand);
+                    }
+                    else if (propName == "GitHubCliPath" && request.GitHubCliPath != null)
+                    {
+                        writer.WriteString(propName, request.GitHubCliPath);
+                    }
+                    else if (propName == "GitCliPath" && request.GitCliPath != null)
+                    {
+                        writer.WriteString(propName, request.GitCliPath);
+                    }
+                    else if (propName == "AllowedShellCommands" && request.AllowedShellCommands != null)
+                    {
+                        writer.WritePropertyName(propName);
+                        writer.WriteStartArray();
+                        foreach (var cmd in request.AllowedShellCommands)
+                        {
+                            writer.WriteStringValue(cmd);
+                        }
+                        writer.WriteEndArray();
+                    }
+                    else if (propName == "AllowedWorkRoots" && request.AllowedWorkRoots != null)
+                    {
+                        writer.WritePropertyName(propName);
+                        writer.WriteStartArray();
+                        foreach (var root in request.AllowedWorkRoots)
+                        {
+                            writer.WriteStringValue(root);
+                        }
+                        writer.WriteEndArray();
+                    }
+                    else
+                    {
+                        settingProp.WriteTo(writer);
+                    }
+                }
+                
+                // Add new properties if they don't exist
+                if (request.GitCliPath != null && !mobileAICLI.TryGetProperty("GitCliPath", out _))
+                {
+                    writer.WriteString("GitCliPath", request.GitCliPath);
+                }
+                if (request.AllowedWorkRoots != null && !mobileAICLI.TryGetProperty("AllowedWorkRoots", out _))
+                {
+                    writer.WritePropertyName("AllowedWorkRoots");
+                    writer.WriteStartArray();
+                    foreach (var root in request.AllowedWorkRoots)
+                    {
+                        writer.WriteStringValue(root);
+                    }
+                    writer.WriteEndArray();
+                }
+                
+                return Task.CompletedTask;
+            });
+            
+            await File.WriteAllTextAsync(_settingsFilePath, updatedJson);
+            
+            _logger.LogInformation("Settings updated successfully");
+            
+            // Audit log (mask sensitive data)
+            var changes = new List<string>();
+            if (request.RepositoryPath != null) changes.Add("RepositoryPath");
+            if (request.GitHubCopilotCommand != null) changes.Add("GitHubCopilotCommand");
+            if (request.GitHubCliPath != null) changes.Add("GitHubCliPath");
+            if (request.GitCliPath != null) changes.Add("GitCliPath");
+            if (request.AllowedShellCommands != null) changes.Add($"AllowedShellCommands({request.AllowedShellCommands.Count})");
+            if (request.AllowedWorkRoots != null) changes.Add($"AllowedWorkRoots({request.AllowedWorkRoots.Count})");
+            
+            _auditLog.LogSettingsChange("System", "UpdateSettings", string.Join(", ", changes));
+            
+            result.Success = true;
+            result.Message = "Settings updated successfully. Restart may be required for changes to take effect.";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating settings");
+            result.Success = false;
+            result.Message = $"Error updating settings: {ex.Message}";
+            return result;
+        }
+    }
+
+    public async Task<SettingsUpdateResult> ChangePasswordAsync(PasswordChangeRequest request)
+    {
+        var result = new SettingsUpdateResult();
+
+        try
+        {
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword) || 
+                string.IsNullOrWhiteSpace(request.NewPassword))
+            {
+                result.Success = false;
+                result.Message = "Current and new passwords are required";
+                return result;
+            }
+
+            if (request.NewPassword.Length < 8)
+            {
+                result.Success = false;
+                result.Message = "New password must be at least 8 characters";
+                return result;
+            }
+
+            var currentSettings = _settings.Value;
+            
+            // Verify current password
+            if (!string.IsNullOrEmpty(currentSettings.PasswordHash))
+            {
+                if (!VerifyPassword(request.CurrentPassword, currentSettings.PasswordHash))
+                {
+                    _logger.LogWarning("Failed password change attempt");
+                    _auditLog.LogPasswordChange("System", false);
+                    result.Success = false;
+                    result.Message = "Current password is incorrect";
+                    return result;
+                }
+            }
+
+            // Generate new password hash
+            var newHash = HashPassword(request.NewPassword);
+
+            // Update settings with new hash
+            var updateRequest = new SettingsUpdateRequest();
+            
+            // Update settings file with new password hash
+            var updatedJson = await UpdateJsonSettingAsync((mobileAICLI, writer) =>
+            {
+                foreach (var settingProp in mobileAICLI.EnumerateObject())
+                {
+                    if (settingProp.Name == "PasswordHash")
+                    {
+                        writer.WriteString("PasswordHash", newHash);
+                    }
+                    else
+                    {
+                        settingProp.WriteTo(writer);
+                    }
+                }
+                
+                // Add PasswordHash if it doesn't exist
+                if (!mobileAICLI.TryGetProperty("PasswordHash", out _))
+                {
+                    writer.WriteString("PasswordHash", newHash);
+                }
+                
+                return Task.CompletedTask;
+            });
+            
+            await File.WriteAllTextAsync(_settingsFilePath, updatedJson);
+            
+            _logger.LogInformation("Password changed successfully");
+            _auditLog.LogPasswordChange("System", true);
+            
+            result.Success = true;
+            result.Message = "Password changed successfully";
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error changing password");
+            result.Success = false;
+            result.Message = $"Error changing password: {ex.Message}";
+            return result;
+        }
+    }
+
+    private string HashPassword(string password)
+    {
+        // Use PBKDF2 with HMACSHA256
+        const int saltSize = 16;
+        const int hashSize = 32;
+        const int iterations = 100000;
+
+        using var rng = RandomNumberGenerator.Create();
+        var salt = new byte[saltSize];
+        rng.GetBytes(salt);
+
+        using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256);
+        var hash = pbkdf2.GetBytes(hashSize);
+
+        var hashBytes = new byte[saltSize + hashSize];
+        Array.Copy(salt, 0, hashBytes, 0, saltSize);
+        Array.Copy(hash, 0, hashBytes, saltSize, hashSize);
+
+        return Convert.ToBase64String(hashBytes);
+    }
+
+    private bool VerifyPassword(string password, string passwordHash)
+    {
+        try
+        {
+            const int saltSize = 16;
+            const int hashSize = 32;
+            const int iterations = 100000;
+
+            var hashBytes = Convert.FromBase64String(passwordHash);
+            
+            if (hashBytes.Length != saltSize + hashSize)
+            {
+                return false;
+            }
+
+            var salt = new byte[saltSize];
+            Array.Copy(hashBytes, 0, salt, 0, saltSize);
+
+            using var pbkdf2 = new Rfc2898DeriveBytes(password, salt, iterations, HashAlgorithmName.SHA256);
+            var hash = pbkdf2.GetBytes(hashSize);
+
+            for (int i = 0; i < hashSize; i++)
+            {
+                if (hashBytes[i + saltSize] != hash[i])
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private async Task<string> UpdateJsonSettingAsync(Func<JsonElement, Utf8JsonWriter, Task> updateMobileAICLISection)
+    {
+        var settingsJson = await File.ReadAllTextAsync(_settingsFilePath);
+        var settingsDoc = JsonDocument.Parse(settingsJson);
+        
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
+        {
+            writer.WriteStartObject();
+            
+            foreach (var property in settingsDoc.RootElement.EnumerateObject())
+            {
+                if (property.Name == "MobileAICLI")
+                {
+                    writer.WritePropertyName("MobileAICLI");
+                    writer.WriteStartObject();
+                    
+                    await updateMobileAICLISection(property.Value, writer);
+                    
+                    writer.WriteEndObject();
+                }
+                else
+                {
+                    property.WriteTo(writer);
+                }
+            }
+            
+            writer.WriteEndObject();
+        }
+        
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private bool IsCommandInPath(string command)
+    {
+        var pathVar = Environment.GetEnvironmentVariable("PATH");
+        if (string.IsNullOrEmpty(pathVar))
+        {
+            return false;
+        }
+
+        var paths = pathVar.Split(Path.PathSeparator);
+        var extensions = Environment.OSVersion.Platform == PlatformID.Win32NT
+            ? new[] { "", ".exe", ".cmd", ".bat", ".com" }
+            : new[] { "" };
+
+        foreach (var path in paths)
+        {
+            foreach (var ext in extensions)
+            {
+                var fullPath = Path.Combine(path, command + ext);
+                if (File.Exists(fullPath))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+}

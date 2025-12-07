@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using MobileAICLI.Models;
 using MobileAICLI.Services;
 
 namespace MobileAICLI.Hubs;
@@ -10,26 +12,29 @@ namespace MobileAICLI.Hubs;
 public class CopilotHub : Hub
 {
     private readonly CopilotStreamingService _copilotService;
+    private readonly MobileAICLISettings _settings;
     private readonly ILogger<CopilotHub> _logger;
 
-    public CopilotHub(CopilotStreamingService copilotService, ILogger<CopilotHub> logger)
+    public CopilotHub(CopilotStreamingService copilotService, IOptions<MobileAICLISettings> settings, ILogger<CopilotHub> logger)
     {
         _copilotService = copilotService;
+        _settings = settings.Value;
         _logger = logger;
     }
 
     /// <summary>
-    /// Copilot에 프롬프트 전송
+    /// Send prompt to Copilot
     /// </summary>
-    public async Task SendPrompt(string prompt, CopilotToolSettings? toolSettings = null)
+    public async Task SendPrompt(string prompt, CopilotToolSettings? toolSettings = null, string? model = null)
     {
-        _logger.LogInformation("SendPrompt called with: {Prompt}", TruncateForLog(prompt));
+        _logger.LogInformation("SendPrompt called with: {Prompt}, Model: {Model}", TruncateForLog(prompt), model ?? "default");
 
         try
         {
             await foreach (var output in _copilotService.SendPromptStreamingAsync(
                 prompt, 
-                toolSettings, 
+                toolSettings,
+                model,
                 Context.ConnectionAborted))
             {
                 switch (output.Type)
@@ -74,7 +79,9 @@ public class CopilotHub : Hub
                 Version = version,
                 Authenticated = authenticated,
                 User = user,
-                Error = installed ? (authenticated ? null : authError) : installError
+                Error = installed ? (authenticated ? null : authError) : installError,
+                CurrentModel = _settings.CopilotModel,
+                AllowedModels = _settings.AllowedCopilotModels
             };
         }
         catch (Exception ex)
@@ -84,7 +91,9 @@ public class CopilotHub : Hub
             {
                 Installed = false,
                 Authenticated = false,
-                Error = ex.Message
+                Error = ex.Message,
+                CurrentModel = _settings.CopilotModel,
+                AllowedModels = _settings.AllowedCopilotModels
             };
         }
     }
@@ -120,4 +129,6 @@ public class CopilotStatusResult
     public bool Authenticated { get; set; }
     public string? User { get; set; }
     public string? Error { get; set; }
+    public string CurrentModel { get; set; } = "default";
+    public List<string> AllowedModels { get; set; } = new();
 }

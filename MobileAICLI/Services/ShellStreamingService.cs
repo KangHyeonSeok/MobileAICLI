@@ -14,7 +14,7 @@ public class ShellStreamingService
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<ShellStreamingService> _logger;
 
-    public ShellStreamingService(IOptions<MobileAICLISettings> settings, ILogger<ShellStreamingService> logger)
+    public ShellStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<ShellStreamingService> logger)
     {
         _settings = settings.Value;
         _logger = logger;

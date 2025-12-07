@@ -9,7 +9,7 @@ public class TerminalService
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<TerminalService> _logger;
 
-    public TerminalService(IOptions<MobileAICLISettings> settings, ILogger<TerminalService> logger)
+    public TerminalService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<TerminalService> logger)
     {
         _settings = settings.Value;
         _logger = logger;

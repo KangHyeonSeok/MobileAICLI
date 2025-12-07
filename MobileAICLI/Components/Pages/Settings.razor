@@ -1,0 +1,389 @@
+@page "/settings"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.SignalR.Client
+@using MobileAICLI.Models
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+
+<PageTitle>Environment Settings</PageTitle>
+
+<div class="container-fluid mt-3">
+    <h3>Environment Settings</h3>
+    
+    @if (!string.IsNullOrEmpty(_errorMessage))
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @_errorMessage
+            <button type="button" class="btn-close" @onclick="() => _errorMessage = null"></button>
+        </div>
+    }
+    
+    @if (!string.IsNullOrEmpty(_successMessage))
+    {
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            @_successMessage
+            <button type="button" class="btn-close" @onclick="() => _successMessage = null"></button>
+        </div>
+    }
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Path Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="repoPath" class="form-label">Repository Path</label>
+                        <input type="text" class="form-control" id="repoPath" @bind="_repositoryPath" />
+                        <small class="form-text text-muted">Base path for file operations</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="copilotCmd" class="form-label">GitHub Copilot Command</label>
+                        <input type="text" class="form-control" id="copilotCmd" @bind="_copilotCommand" />
+                        <small class="form-text text-muted">Command to invoke GitHub Copilot CLI</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="ghPath" class="form-label">GitHub CLI Path</label>
+                        <input type="text" class="form-control" id="ghPath" @bind="_ghCliPath" />
+                        <small class="form-text text-muted">Path to gh CLI executable</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="gitPath" class="form-label">Git CLI Path</label>
+                        <input type="text" class="form-control" id="gitPath" @bind="_gitCliPath" />
+                        <small class="form-text text-muted">Path to git executable (default: git)</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Allowed Shell Commands</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="newCommand" class="form-label">Add Command</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="newCommand" @bind="_newCommand" placeholder="e.g., ls -la" />
+                            <button class="btn btn-primary" @onclick="AddCommand">Add</button>
+                        </div>
+                    </div>
+                    
+                    <div class="list-group">
+                        @if (_allowedCommands != null)
+                        {
+                            @foreach (var cmd in _allowedCommands)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <code>@cmd</code>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RemoveCommand(cmd)">Remove</button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Allowed Work Roots</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="newRoot" class="form-label">Add Work Root</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="newRoot" @bind="_newWorkRoot" placeholder="e.g., /path/to/workspace" />
+                            <button class="btn btn-primary" @onclick="AddWorkRoot">Add</button>
+                        </div>
+                        <small class="form-text text-muted">Paths that are allowed for file operations (supports wildcards like /path/*)</small>
+                    </div>
+                    
+                    <div class="list-group">
+                        @if (_allowedWorkRoots != null)
+                        {
+                            @foreach (var root in _allowedWorkRoots)
+                            {
+                                <div class="list-group-item d-flex justify-content-between align-items-center">
+                                    <code>@root</code>
+                                    <button class="btn btn-sm btn-danger" @onclick="() => RemoveWorkRoot(root)">Remove</button>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary btn-lg" @onclick="SaveSettings" disabled="@_isSaving">
+                    @if (_isSaving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                    }
+                    Save Settings
+                </button>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Change Password</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="currentPassword" class="form-label">Current Password</label>
+                        <input type="password" class="form-control" id="currentPassword" @bind="_currentPassword" />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="newPassword" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="newPassword" @bind="_newPassword" />
+                        <small class="form-text text-muted">Minimum 8 characters</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="confirmPassword" class="form-label">Confirm Password</label>
+                        <input type="password" class="form-control" id="confirmPassword" @bind="_confirmPassword" />
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button class="btn btn-warning" @onclick="ChangePassword" disabled="@_isChangingPassword">
+                            @if (_isChangingPassword)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            }
+                            Change Password
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5>Current Settings</h5>
+                </div>
+                <div class="card-body">
+                    @if (_currentSettings != null)
+                    {
+                        <dl class="row small">
+                            <dt class="col-sm-6">Repository:</dt>
+                            <dd class="col-sm-6"><small><code>@_currentSettings.RepositoryPath</code></small></dd>
+                            
+                            <dt class="col-sm-6">Copilot:</dt>
+                            <dd class="col-sm-6"><small><code>@_currentSettings.GitHubCopilotCommand</code></small></dd>
+                            
+                            <dt class="col-sm-6">Commands:</dt>
+                            <dd class="col-sm-6">@_currentSettings.AllowedShellCommands.Count</dd>
+                            
+                            <dt class="col-sm-6">Work Roots:</dt>
+                            <dd class="col-sm-6">@_currentSettings.AllowedWorkRoots.Count</dd>
+                        </dl>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private HubConnection? _hubConnection;
+    private MobileAICLISettings? _currentSettings;
+    
+    private string? _repositoryPath;
+    private string? _copilotCommand;
+    private string? _ghCliPath;
+    private string? _gitCliPath;
+    private List<string>? _allowedCommands;
+    private List<string>? _allowedWorkRoots;
+    
+    private string? _newCommand;
+    private string? _newWorkRoot;
+    
+    private string? _currentPassword;
+    private string? _newPassword;
+    private string? _confirmPassword;
+    
+    private string? _errorMessage;
+    private string? _successMessage;
+    private bool _isSaving;
+    private bool _isChangingPassword;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/settingshub"))
+            .Build();
+
+        await _hubConnection.StartAsync();
+        await LoadSettings();
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+        {
+            if (_hubConnection is not null)
+            {
+                _currentSettings = await _hubConnection.InvokeAsync<MobileAICLISettings>("GetSettings");
+                
+                _repositoryPath = _currentSettings.RepositoryPath;
+                _copilotCommand = _currentSettings.GitHubCopilotCommand;
+                _ghCliPath = _currentSettings.GitHubCliPath;
+                _gitCliPath = _currentSettings.GitCliPath;
+                _allowedCommands = new List<string>(_currentSettings.AllowedShellCommands);
+                _allowedWorkRoots = new List<string>(_currentSettings.AllowedWorkRoots);
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error loading settings: {ex.Message}";
+        }
+    }
+
+    private void AddCommand()
+    {
+        if (!string.IsNullOrWhiteSpace(_newCommand) && _allowedCommands != null)
+        {
+            if (!_allowedCommands.Contains(_newCommand))
+            {
+                _allowedCommands.Add(_newCommand);
+                _newCommand = null;
+            }
+        }
+    }
+
+    private void RemoveCommand(string cmd)
+    {
+        _allowedCommands?.Remove(cmd);
+    }
+
+    private void AddWorkRoot()
+    {
+        if (!string.IsNullOrWhiteSpace(_newWorkRoot) && _allowedWorkRoots != null)
+        {
+            if (!_allowedWorkRoots.Contains(_newWorkRoot))
+            {
+                _allowedWorkRoots.Add(_newWorkRoot);
+                _newWorkRoot = null;
+            }
+        }
+    }
+
+    private void RemoveWorkRoot(string root)
+    {
+        _allowedWorkRoots?.Remove(root);
+    }
+
+    private async Task SaveSettings()
+    {
+        _isSaving = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            if (_hubConnection is not null)
+            {
+                var request = new SettingsUpdateRequest
+                {
+                    RepositoryPath = _repositoryPath,
+                    GitHubCopilotCommand = _copilotCommand,
+                    GitHubCliPath = _ghCliPath,
+                    GitCliPath = _gitCliPath,
+                    AllowedShellCommands = _allowedCommands,
+                    AllowedWorkRoots = _allowedWorkRoots
+                };
+
+                var result = await _hubConnection.InvokeAsync<SettingsUpdateResult>("UpdateSettings", request);
+
+                if (result.Success)
+                {
+                    _successMessage = result.Message;
+                    await LoadSettings();
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                    if (result.ValidationErrors.Any())
+                    {
+                        _errorMessage += "\n" + string.Join("\n", result.ValidationErrors);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error saving settings: {ex.Message}";
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private async Task ChangePassword()
+    {
+        _isChangingPassword = true;
+        _errorMessage = null;
+        _successMessage = null;
+
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_currentPassword) || 
+                string.IsNullOrWhiteSpace(_newPassword) || 
+                string.IsNullOrWhiteSpace(_confirmPassword))
+            {
+                _errorMessage = "All password fields are required";
+                return;
+            }
+
+            if (_newPassword != _confirmPassword)
+            {
+                _errorMessage = "New password and confirmation do not match";
+                return;
+            }
+
+            if (_hubConnection is not null)
+            {
+                var request = new PasswordChangeRequest
+                {
+                    CurrentPassword = _currentPassword,
+                    NewPassword = _newPassword
+                };
+
+                var result = await _hubConnection.InvokeAsync<SettingsUpdateResult>("ChangePassword", request);
+
+                if (result.Success)
+                {
+                    _successMessage = result.Message;
+                    _currentPassword = null;
+                    _newPassword = null;
+                    _confirmPassword = null;
+                }
+                else
+                {
+                    _errorMessage = result.Message;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error changing password: {ex.Message}";
+        }
+        finally
+        {
+            _isChangingPassword = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}
