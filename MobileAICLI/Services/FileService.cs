@@ -178,9 +178,10 @@ public class FileService
                     result.ParentPath = parent.FullName;
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Root directory has no parent
+                // Intentionally swallow exception: root directory has no parent, or unexpected error.
+                _logger.LogTrace(ex, "No parent directory for {FullPath} (likely root)", fullPath);
             }
 
             // Get subdirectories
