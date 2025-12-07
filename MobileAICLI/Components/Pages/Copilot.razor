@@ -8,9 +8,9 @@
 <PageTitle>GitHub Copilot</PageTitle>
 
 <div class="copilot-container d-flex flex-column" style="height: calc(100vh - 100px);">
-    @* 상태 표시 바 *@
+    @* Status bar *@
     <div class="status-bar px-3 py-2 border-bottom bg-light">
-        <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="d-flex align-items-center gap-2">
                 <span class="status-indicator @(isConnected ? "bg-success" : "bg-danger")"></span>
                 <small class="text-muted">
@@ -21,6 +21,10 @@
                         {
                             <span> • @copilotUser</span>
                         }
+                        @if (!string.IsNullOrEmpty(currentModel))
+                        {
+                            <span> • Model: @currentModel</span>
+                        }
                     }
                     else
                     {
@@ -28,9 +32,19 @@
                     }
                 </small>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
-                <i class="bi bi-arrow-clockwise"></i> Check Status
-            </button>
+            <div class="d-flex align-items-center gap-2">
+                <select class="form-select form-select-sm" style="width: auto;" 
+                        @bind="selectedModel" 
+                        disabled="@(!isConnected || isLoading)">
+                    @foreach (var model in allowedModels)
+                    {
+                        <option value="@model">@model</option>
+                    }
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
+                    <i class="bi bi-arrow-clockwise"></i> Check Status
+                </button>
+            </div>
         </div>
         @if (!string.IsNullOrEmpty(statusError))
         {
@@ -159,6 +173,9 @@
     private string? statusError;
     private ElementReference chatContainer;
     private ChatMessage? currentStreamingMessage;
+    private string selectedModel = "default";
+    private string currentModel = "default";
+    private List<string> allowedModels = new() { "default" };
 
     protected override async Task OnInitializedAsync()
     {
@@ -264,6 +281,18 @@
                 statusError = result.Error ?? "Copilot CLI is not properly configured";
                 copilotUser = null;
             }
+
+            // Update model information
+            currentModel = result.CurrentModel ?? "default";
+            if (result.AllowedModels?.Count > 0)
+            {
+                allowedModels = result.AllowedModels;
+                // Set selected model to current model if available
+                if (allowedModels.Contains(currentModel))
+                {
+                    selectedModel = currentModel;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -302,7 +331,9 @@
 
         try
         {
-            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null);
+            // Validate selected model against allowed list
+            var modelToUse = allowedModels.Contains(selectedModel) ? selectedModel : currentModel;
+            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null, modelToUse);
         }
         catch (Exception ex)
         {
@@ -360,5 +391,7 @@
         public bool Authenticated { get; set; }
         public string? User { get; set; }
         public string? Error { get; set; }
+        public string? CurrentModel { get; set; }
+        public List<string>? AllowedModels { get; set; }
     }
 }
