@@ -136,8 +136,14 @@ public class FileService
     }
 
     /// <summary>
-    /// Browse directories for folder picker
+    /// Browse directories for folder picker with security validation
     /// </summary>
+    /// <param name="path">Target directory path. If null or empty, uses user's Documents folder</param>
+    /// <returns>FolderBrowserResult containing current path, parent path, and list of accessible subdirectories</returns>
+    /// <remarks>
+    /// This method filters out hidden and system folders for security.
+    /// Folders without access permission are marked as inaccessible.
+    /// </remarks>
     public FolderBrowserResult BrowseDirectories(string? path = null)
     {
         try

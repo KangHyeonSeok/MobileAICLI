@@ -35,10 +35,11 @@
                         <label class="form-label fw-bold">현재 경로:</label>
                         <div class="input-group">
                             <input type="text" class="form-control" value="@currentPath" readonly>
-                            <button class="btn btn-outline-secondary" @onclick="CopyPath" title="경로 복사">
+                            <button class="btn btn-outline-secondary" @onclick="CopyPath" title="경로 복사" disabled>
                                 <i class="bi bi-clipboard"></i>
                             </button>
                         </div>
+                        <small class="text-muted">경로 복사 기능은 향후 구현 예정</small>
                     </div>
 
                     @* Parent directory button *@
@@ -132,11 +133,13 @@
 
     private async Task LoadPath(string? path = null)
     {
+        const int LoadingDelayMs = 100;
+        
         isLoading = true;
         errorMessage = null;
         StateHasChanged();
 
-        await Task.Delay(100); // Small delay to show loading state
+        await Task.Delay(LoadingDelayMs); // Small delay to show loading state
 
         var result = FileService.BrowseDirectories(path);
         
@@ -176,10 +179,12 @@
         }
     }
 
+    // Note: Copy functionality would require IJSRuntime injection
+    // Disabled for now to avoid incomplete implementation
     private void CopyPath()
     {
-        // In a real implementation, we would use JS interop to copy to clipboard
-        // For now, this is just a placeholder
+        // TODO: Implement clipboard copy using IJSRuntime
+        // await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", currentPath);
     }
 
     private async Task Confirm()
