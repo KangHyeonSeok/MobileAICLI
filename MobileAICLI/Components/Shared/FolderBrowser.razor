@@ -2,11 +2,15 @@
 @using MobileAICLI.Services
 @inject FileService FileService
 
-<div class="modal fade @(IsVisible ? "show" : "")" style="display: @(IsVisible ? "block" : "none");" tabindex="-1">
+<div class="modal fade @(IsVisible ? "show" : "")"
+     style="display: @(IsVisible ? "block" : "none");"
+     tabindex="-1"
+     aria-labelledby="folderBrowserTitle"
+     aria-modal="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">📁 작업 디렉토리 선택</h5>
+                <h5 class="modal-title" id="folderBrowserTitle">📁 작업 디렉토리 선택</h5>
                 <button type="button" class="btn-close" @onclick="Cancel"></button>
             </div>
             <div class="modal-body">
