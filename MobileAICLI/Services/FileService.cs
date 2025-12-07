@@ -5,12 +5,12 @@ namespace MobileAICLI.Services;
 
 public class FileService
 {
-    private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<FileService> _logger;
 
     public FileService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<FileService> logger)
     {
-        _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -27,17 +27,10 @@ public class FileService
     {
         try
         {
-            var path = string.IsNullOrEmpty(relativePath) 
-                ? _settings.RepositoryPath 
-                : Path.Combine(_settings.RepositoryPath, relativePath);
+            var fullPath = _context.GetAbsolutePath(relativePath);
 
-            // Ensure path is within the repository with robust validation
-            var fullPath = Path.GetFullPath(path);
-            var repoPath = Path.GetFullPath(_settings.RepositoryPath);
-            
-            // Use Path.GetRelativePath to ensure path is within repository
-            var relPath = Path.GetRelativePath(repoPath, fullPath);
-            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
+            // Validate path is within root
+            if (!_context.ValidatePathWithinRoot(fullPath))
             {
                 _logger.LogWarning("Attempted to access path outside repository: {Path}", fullPath);
                 return new List<FileItem>();
@@ -57,7 +50,7 @@ public class FileService
                 items.Add(new FileItem
                 {
                     Name = dirInfo.Name,
-                    FullPath = Path.GetRelativePath(_settings.RepositoryPath, dir),
+                    FullPath = Path.GetRelativePath(_context.CurrentRoot, dir),
                     IsDirectory = true,
                     LastModified = dirInfo.LastWriteTime
                 });
@@ -70,7 +63,7 @@ public class FileService
                 items.Add(new FileItem
                 {
                     Name = fileInfo.Name,
-                    FullPath = Path.GetRelativePath(_settings.RepositoryPath, file),
+                    FullPath = Path.GetRelativePath(_context.CurrentRoot, file),
                     IsDirectory = false,
                     Size = fileInfo.Length,
                     LastModified = fileInfo.LastWriteTime
@@ -90,12 +83,10 @@ public class FileService
     {
         try
         {
-            var fullPath = Path.GetFullPath(Path.Combine(_settings.RepositoryPath, relativePath));
-            var repoPath = Path.GetFullPath(_settings.RepositoryPath);
+            var fullPath = _context.GetAbsolutePath(relativePath);
 
-            // Use Path.GetRelativePath for robust path validation
-            var relPath = Path.GetRelativePath(repoPath, fullPath);
-            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
+            // Validate path is within root
+            if (!_context.ValidatePathWithinRoot(fullPath))
             {
                 return (false, "Access denied: Path is outside repository");
             }
@@ -119,12 +110,10 @@ public class FileService
     {
         try
         {
-            var fullPath = Path.GetFullPath(Path.Combine(_settings.RepositoryPath, relativePath));
-            var repoPath = Path.GetFullPath(_settings.RepositoryPath);
+            var fullPath = _context.GetAbsolutePath(relativePath);
 
-            // Use Path.GetRelativePath for robust path validation
-            var relPath = Path.GetRelativePath(repoPath, fullPath);
-            if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
+            // Validate path is within root
+            if (!_context.ValidatePathWithinRoot(fullPath))
             {
                 return (false, "Access denied: Path is outside repository");
             }

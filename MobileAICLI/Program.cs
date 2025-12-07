@@ -55,6 +55,7 @@ builder.Services.AddScoped(sp => new HttpClient
 builder.Services.AddSignalR();
 
 // Add application services
+builder.Services.AddScoped<RepositoryContext>();
 builder.Services.AddSingleton<AuditLogService>();
 builder.Services.AddScoped<FileService>();
 builder.Services.AddScoped<TerminalService>();

@@ -8,6 +8,7 @@ public class MobileAICLISettings
     public string GitCliPath { get; set; } = "git";
     public bool EnableCopilotMock { get; set; } = false;
     public List<string> AllowedShellCommands { get; set; } = new();
+    public List<string> AllowedRepositoryRoots { get; set; } = new();
     public List<string> AllowedWorkRoots { get; set; } = new();
     public string PasswordHash { get; set; } = "";
     

@@ -13,11 +13,14 @@ namespace MobileAICLI.Services;
 public class CopilotStreamingService
 {
     private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<CopilotStreamingService> _logger;
 
+    public CopilotStreamingService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotStreamingService> logger)
     public CopilotStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
     {
         _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -441,6 +444,9 @@ public class CopilotStreamingService
     {
         try
         {
+            var workingDir = _context.GetAbsolutePath();
+            
+            if (Directory.Exists(workingDir))
             // 커스텀 경로가 지정되었으면 우선 사용
             if (!string.IsNullOrWhiteSpace(customPath) && Directory.Exists(customPath))
             {
@@ -449,7 +455,7 @@ public class CopilotStreamingService
             
             if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
             {
-                return _settings.RepositoryPath;
+                return workingDir;
             }
 
             // OS별 기본 Documents 디렉토리
@@ -460,7 +466,7 @@ public class CopilotStreamingService
             }
 
             var fallback = Environment.CurrentDirectory;
-            _logger.LogWarning("RepositoryPath does not exist. Using fallback working directory: {WorkingDirectory}", fallback);
+            _logger.LogWarning("Context working directory does not exist. Using fallback: {WorkingDirectory}", fallback);
             return fallback;
         }
         catch

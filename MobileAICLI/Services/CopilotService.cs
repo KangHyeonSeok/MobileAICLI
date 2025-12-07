@@ -7,11 +7,14 @@ namespace MobileAICLI.Services;
 public class CopilotService
 {
     private readonly MobileAICLISettings _settings;
+    private readonly RepositoryContext _context;
     private readonly ILogger<CopilotService> _logger;
 
+    public CopilotService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotService> logger)
     public CopilotService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotService> logger)
     {
         _settings = settings.Value;
+        _context = context;
         _logger = logger;
     }
 
@@ -36,7 +39,7 @@ public class CopilotService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _settings.RepositoryPath
+                WorkingDirectory = _context.GetAbsolutePath()
             };
 
             // Use ArgumentList for safer command execution
@@ -105,7 +108,7 @@ public class CopilotService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _settings.RepositoryPath
+                WorkingDirectory = _context.GetAbsolutePath()
             };
 
             // Use ArgumentList for safer command execution

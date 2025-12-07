@@ -1,4 +1,87 @@
 @page "/settings"
+@using MobileAICLI.Services
+@using Microsoft.JSInterop
+@inject RepositoryContext RepositoryContext
+@inject IJSRuntime JSRuntime
+@inject ILogger<Settings> Logger
+@rendermode InteractiveServer
+
+<PageTitle>Settings - MobileAICLI</PageTitle>
+
+<h3><i class="bi bi-gear"></i> Settings</h3>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0">📁 Working Directory</h5>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="workingDirectory" class="form-label">Working Directory Path</label>
+            <div class="input-group">
+                <input type="text" 
+                       class="form-control" 
+                       id="workingDirectory" 
+                       @bind="newWorkingDirectory"
+                       @bind:event="oninput"
+                       placeholder="Enter working directory path" />
+                <button class="btn btn-primary" @onclick="ChangeWorkingDirectory">
+                    <i class="bi bi-check-circle"></i> Apply
+                </button>
+            </div>
+            <small class="form-text text-muted">
+                Enter an absolute path to a Git repository.
+            </small>
+        </div>
+
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="alert @(statusSuccess ? "alert-success" : "alert-danger") alert-dismissible fade show" role="alert">
+                @statusMessage
+                <button type="button" class="btn-close" @onclick="ClearStatus"></button>
+            </div>
+        }
+
+        <div class="mt-3">
+            <h6>Current Configuration:</h6>
+            <table class="table table-sm">
+                <tbody>
+                    <tr>
+                        <th scope="row">Current Root:</th>
+                        <td><code>@currentRoot</code></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Current Working Path:</th>
+                        <td><code>@(string.IsNullOrEmpty(currentWorkingPath) ? "(root)" : currentWorkingPath)</code></td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Status:</th>
+                        <td>
+                            @if (isValidDirectory)
+                            {
+                                <span class="badge bg-success">
+                                    <i class="bi bi-check-circle"></i> Directory accessible
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-warning">
+                                    <i class="bi bi-exclamation-triangle"></i> Validation pending
+                                </span>
+                            }
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="alert alert-info mt-3" role="alert">
+            <strong><i class="bi bi-info-circle"></i> Requirements:</strong>
+            <ul class="mb-0 mt-2">
+                <li>Path must be an absolute path to an existing directory</li>
+                <li>Directory must be a Git repository (contains <code>.git</code> folder)</li>
+                <li>Your configuration will be saved in browser localStorage</li>
+                <li>If no path is configured, the system defaults to your Documents folder</li>
+            </ul>
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.SignalR.Client
 @using MobileAICLI.Models
@@ -189,6 +272,100 @@
 </div>
 
 @code {
+    private string currentRoot = string.Empty;
+    private string currentWorkingPath = string.Empty;
+    private string newWorkingDirectory = string.Empty;
+    private string statusMessage = string.Empty;
+    private bool statusSuccess = false;
+    private bool isValidDirectory = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentSettings();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Try to load from localStorage
+            try
+            {
+                var savedPath = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "workingDirectory");
+                if (!string.IsNullOrEmpty(savedPath))
+                {
+                    newWorkingDirectory = savedPath;
+                    // Validate and apply saved path (validation happens in RepositoryContext)
+                    // Silent mode only suppresses empty path messages, not validation errors
+                    await ApplyWorkingDirectory(savedPath, silent: true);
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Error loading from localStorage");
+            }
+        }
+    }
+
+    private async Task LoadCurrentSettings()
+    {
+        currentRoot = RepositoryContext.CurrentRoot;
+        currentWorkingPath = RepositoryContext.CurrentWorkingPath;
+        newWorkingDirectory = currentRoot;
+        
+        // Check if current directory is valid
+        isValidDirectory = Directory.Exists(currentRoot);
+    }
+
+    private async Task ChangeWorkingDirectory()
+    {
+        await ApplyWorkingDirectory(newWorkingDirectory, silent: false);
+    }
+
+    private async Task ApplyWorkingDirectory(string path, bool silent)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            if (!silent)
+            {
+                statusMessage = "Please enter a valid directory path";
+                statusSuccess = false;
+            }
+            return;
+        }
+
+        var result = await RepositoryContext.ChangeRootAsync(path);
+        
+        if (result.Success)
+        {
+            statusSuccess = true;
+            statusMessage = result.Message;
+            isValidDirectory = true;
+            
+            // Save to localStorage
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "workingDirectory", path);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Error saving to localStorage");
+            }
+            
+            await LoadCurrentSettings();
+        }
+        else
+        {
+            statusSuccess = false;
+            statusMessage = result.Message;
+            isValidDirectory = false;
+        }
+    }
+
+    private void ClearStatus()
+    {
+        statusMessage = string.Empty;
     private HubConnection? _hubConnection;
     private MobileAICLISettings? _currentSettings;
     
