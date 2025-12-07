@@ -15,7 +15,7 @@ public class CopilotService
         _logger = logger;
     }
 
-    public async Task<(bool Success, string Output, string Error)> AskCopilotAsync(string prompt)
+    public async Task<(bool Success, string Output, string Error)> AskCopilotAsync(string prompt, string? model = null)
     {
         try
         {
@@ -46,6 +46,15 @@ public class CopilotService
                 startInfo.ArgumentList.Add(commandParts[i]);
             }
             startInfo.ArgumentList.Add("suggest");
+            
+            // Add model parameter if specified and not default
+            var validatedModel = ValidateAndGetModel(model);
+            if (!string.IsNullOrEmpty(validatedModel) && validatedModel != "default")
+            {
+                startInfo.ArgumentList.Add("--model");
+                startInfo.ArgumentList.Add(validatedModel);
+            }
+            
             startInfo.ArgumentList.Add(prompt);
 
             using var process = new Process { StartInfo = startInfo };
@@ -75,7 +84,7 @@ public class CopilotService
         }
     }
 
-    public async Task<(bool Success, string Output, string Error)> ExplainCommandAsync(string command)
+    public async Task<(bool Success, string Output, string Error)> ExplainCommandAsync(string command, string? model = null)
     {
         try
         {
@@ -106,6 +115,15 @@ public class CopilotService
                 startInfo.ArgumentList.Add(commandParts[i]);
             }
             startInfo.ArgumentList.Add("explain");
+            
+            // Add model parameter if specified and not default
+            var validatedModel = ValidateAndGetModel(model);
+            if (!string.IsNullOrEmpty(validatedModel) && validatedModel != "default")
+            {
+                startInfo.ArgumentList.Add("--model");
+                startInfo.ArgumentList.Add(validatedModel);
+            }
+            
             startInfo.ArgumentList.Add(command);
 
             using var process = new Process { StartInfo = startInfo };
@@ -133,5 +151,29 @@ public class CopilotService
             _logger.LogError(ex, "Error executing Copilot explain for command: {Command}", command);
             return (false, string.Empty, $"Error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// 모델 이름을 검증하고 허용된 모델이 아닌 경우 기본값 반환
+    /// </summary>
+    private string ValidateAndGetModel(string? model)
+    {
+        // 모델이 지정되지 않았거나 비어있으면 기본값 사용
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            return _settings.CopilotModel;
+        }
+
+        // 허용된 모델 목록에 있는지 확인
+        if (_settings.AllowedCopilotModels.Contains(model, StringComparer.OrdinalIgnoreCase))
+        {
+            return model;
+        }
+
+        // 허용되지 않은 모델인 경우 경고 로그와 함께 기본값 사용
+        _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+            model, _settings.CopilotModel);
+        
+        return _settings.CopilotModel;
     }
 }
