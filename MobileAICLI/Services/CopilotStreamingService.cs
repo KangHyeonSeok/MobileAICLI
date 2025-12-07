@@ -119,7 +119,7 @@ public class CopilotStreamingService
     }
 
     /// <summary>
-    /// Copilot에 프롬프트를 보내고 응답을 실시간으로 스트리밍
+    /// Send prompt to Copilot and stream response in real-time
     /// </summary>
     public async IAsyncEnumerable<CopilotOutput> SendPromptStreamingAsync(
         string prompt,
@@ -128,7 +128,7 @@ public class CopilotStreamingService
         [EnumeratorCancellation] CancellationToken cancellationToken = default,
         int timeoutSeconds = 120)
     {
-        // 프롬프트 검증
+        // Prompt validation
         if (string.IsNullOrWhiteSpace(prompt))
         {
             yield return CopilotOutput.Error("Prompt cannot be empty");
@@ -149,11 +149,11 @@ public class CopilotStreamingService
         }
         else
         {
-            // 백그라운드에서 프로세스 실행
+            // Execute process in background
             _ = ExecuteCopilotProcessAsync(prompt, toolSettings, validatedModel, channel.Writer, timeoutSeconds, cancellationToken);
         }
 
-        // 채널에서 결과 읽기
+        // Read results from channel
         await foreach (var output in channel.Reader.ReadAllAsync(cancellationToken))
         {
             yield return output;
