@@ -568,9 +568,12 @@
             return;
         }
 
+        var selected = currentValue ?? paths.First();
+        onSelect(selected);
+
         builder.OpenElement(17, "select");
         builder.AddAttribute(18, "class", "form-select form-select-sm");
-        builder.AddAttribute(19, "value", currentValue ?? paths.First());
+        builder.AddAttribute(19, "value", selected);
         builder.AddAttribute(20, "onchange", EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
         {
             var val = e.Value?.ToString();

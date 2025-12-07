@@ -58,6 +58,22 @@ public class ToolDiscoveryService
                 result.Diagnostics["gh"] = ghProbe.Diagnostic;
             }
 
+            if (result.GhPaths.Count == 0)
+            {
+                foreach (var candidate in GetGhCandidates())
+                {
+                    if (File.Exists(candidate) && !result.GhPaths.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+                    {
+                        result.GhPaths.Add(candidate);
+                    }
+                }
+
+                if (result.GhPaths.Count > 0)
+                {
+                    result.Diagnostics.Remove("gh");
+                }
+            }
+
             var gitProbe = await RunProbeAsync(command.Value, "git", cancellationToken);
             result.GitPaths = gitProbe.Paths;
             if (!string.IsNullOrEmpty(gitProbe.Diagnostic))
@@ -210,5 +226,29 @@ public class ToolDiscoveryService
         }
 
         return stdout;
+    }
+
+    private IEnumerable<string> GetGhCandidates()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var list = new List<string>();
+
+        void Add(string path)
+        {
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                list.Add(path);
+            }
+        }
+
+        Add(Path.Combine(home, ".local", "bin", "gh"));
+        Add(Path.Combine(home, ".local", "bin", "gh.exe"));
+        Add("/usr/local/bin/gh");
+        Add("/opt/homebrew/bin/gh");
+        Add("/usr/bin/gh");
+        Add("C:/Program Files/GitHub CLI/gh.exe");
+        Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GitHub CLI", "gh.exe"));
+
+        return list;
     }
 }
