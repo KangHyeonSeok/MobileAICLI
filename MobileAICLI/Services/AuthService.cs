@@ -110,8 +110,8 @@ public class AuthService
             return false;
         }
 
-        // Reset if last attempt was more than 15 minutes ago
-        if (DateTime.UtcNow - info.LastAttempt > TimeSpan.FromMinutes(15))
+        // Reset if last attempt was more than configured minutes ago
+        if (DateTime.UtcNow - info.LastAttempt > TimeSpan.FromMinutes(_settings.RateLimitResetMinutes))
         {
             _loginAttempts.Remove(ipAddress);
             return false;

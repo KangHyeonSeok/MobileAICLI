@@ -13,4 +13,5 @@ public class MobileAICLISettings
     public int SessionTimeoutMinutes { get; set; } = 30;
     public int MaxFailedLoginAttempts { get; set; } = 5;
     public int FailedLoginDelaySeconds { get; set; } = 1;
+    public int RateLimitResetMinutes { get; set; } = 15;
 }

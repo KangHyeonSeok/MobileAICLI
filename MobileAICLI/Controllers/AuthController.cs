@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using MobileAICLI.Models;
 using MobileAICLI.Services;
 using System.Security.Claims;
 
@@ -11,11 +13,13 @@ namespace MobileAICLI.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly AuthService _authService;
+    private readonly MobileAICLISettings _settings;
     private readonly ILogger<AuthController> _logger;
 
-    public AuthController(AuthService authService, ILogger<AuthController> logger)
+    public AuthController(AuthService authService, IOptions<MobileAICLISettings> settings, ILogger<AuthController> logger)
     {
         _authService = authService;
+        _settings = settings.Value;
         _logger = logger;
     }
 
@@ -38,7 +42,7 @@ public class AuthController : ControllerBase
             var authProperties = new AuthenticationProperties
             {
                 IsPersistent = false,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(30),
+                ExpiresUtc = DateTimeOffset.UtcNow.AddMinutes(_settings.SessionTimeoutMinutes),
                 AllowRefresh = true
             };
 
