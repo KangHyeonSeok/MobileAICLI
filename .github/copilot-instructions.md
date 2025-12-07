@@ -20,6 +20,10 @@ A .NET 8 Blazor Server app providing mobile-friendly web UI for GitHub Copilot C
 - **features/**: 비개발자도 이해 가능한 기능 설명
 - **technical/**: AI가 참조할 설계 방향, 제약 조건, 아키텍처
 
+## 답변 원칙
+- 구현 내용은 영어로 해도 요약은 반드시 한글로 답변 한다.
+- 일반적인 질문에 대해서는 한글로 쉽게 풀어서 답변 한다.
+
 ## Architecture
 
 ### Core Pattern: Service Layer + Blazor Pages

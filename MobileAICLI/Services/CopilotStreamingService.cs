@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
@@ -84,7 +85,7 @@ public class CopilotStreamingService
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = _settings.GitHubCliPath,
+                FileName = GetGhExecutable(),
                 Arguments = "auth status",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -435,22 +436,60 @@ public class CopilotStreamingService
         return command.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
     }
 
+    private string GetGhExecutable()
+    {
+        var configured = _settings.GitHubCliPath;
+
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+        {
+            return configured;
+        }
+
+        foreach (var candidate in GetGhCandidates())
+        {
+            if (File.Exists(candidate))
+            {
+                _logger.LogInformation("Using fallback gh path: {Path}", candidate);
+                return candidate;
+            }
+        }
+
+        // 마지막 수단으로 기존 설정값 또는 "gh"를 사용 (PATH에 있는 경우)
+        return string.IsNullOrWhiteSpace(configured) ? "gh" : configured;
+    }
+
+    private IEnumerable<string> GetGhCandidates()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+
+        yield return Path.Combine(home, ".local", "bin", "gh");
+        yield return "/opt/homebrew/bin/gh";
+        yield return "/usr/local/bin/gh";
+        yield return "/usr/bin/gh";
+        yield return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "GitHub CLI", "gh.exe");
+        yield return "C:/Program Files/GitHub CLI/gh.exe";
+    }
+
     private string GetSafeWorkingDirectory(string? customPath = null)
     {
         try
         {
             var workingDir = _context.GetAbsolutePath();
-            
-            if (Directory.Exists(workingDir))
+
             // 커스텀 경로가 지정되었으면 우선 사용
             if (!string.IsNullOrWhiteSpace(customPath) && Directory.Exists(customPath))
             {
                 return customPath;
             }
-            
-            if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
+
+            if (!string.IsNullOrWhiteSpace(workingDir) && Directory.Exists(workingDir))
             {
                 return workingDir;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
+            {
+                return _settings.RepositoryPath;
             }
 
             // OS별 기본 Documents 디렉토리
