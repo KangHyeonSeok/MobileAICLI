@@ -1,5 +1,7 @@
 ﻿@inherits LayoutComponentBase
 @using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+@implements IDisposable
 
 <div class="page">
     <button class="sidebar-toggle-btn" @onclick="ToggleSidebar" title="메뉴">
@@ -16,25 +18,30 @@
     }
 
     <main>
-        <div class="top-bar">
-            <AuthorizeView>
-                <Authorized>
-                    <div class="auth-status">
-                        <i class="bi bi-shield-check text-success"></i>
-                        <span class="ms-2">Authenticated</span>
-                        <a href="/logout" class="btn btn-sm btn-outline-secondary ms-3">
-                            <i class="bi bi-box-arrow-right"></i> Logout
-                        </a>
-                    </div>
-                </Authorized>
-                <NotAuthorized>
-                    <div class="auth-status">
-                        <i class="bi bi-shield-x text-warning"></i>
-                        <span class="ms-2">Not authenticated</span>
-                    </div>
-                </NotAuthorized>
-            </AuthorizeView>
-        </div>
+        @* Top bar - conditionally rendered based on current page *@
+        @if (IsSettingsPage())
+        {
+            <div class="top-bar">
+                @* Settings page shows authentication info *@
+                <AuthorizeView>
+                    <Authorized>
+                        <div class="auth-status">
+                            <i class="bi bi-shield-check text-success"></i>
+                            <span class="ms-2">Authenticated</span>
+                            <a href="/logout" class="btn btn-sm btn-outline-secondary ms-3">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a>
+                        </div>
+                    </Authorized>
+                    <NotAuthorized>
+                        <div class="auth-status">
+                            <i class="bi bi-shield-x text-warning"></i>
+                            <span class="ms-2">Not authenticated</span>
+                        </div>
+                    </NotAuthorized>
+                </AuthorizeView>
+            </div>
+        }
         <article class="content px-4">
             @Body
         </article>
@@ -49,6 +56,20 @@
 
 @code {
     private bool sidebarVisible = false;
+    private bool _disposed = false;
+
+    protected override void OnInitialized()
+    {
+        NavigationManager.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (!_disposed)
+        {
+            StateHasChanged();
+        }
+    }
 
     private void ToggleSidebar()
     {
@@ -58,5 +79,23 @@
     private void CloseSidebar()
     {
         sidebarVisible = false;
+    }
+
+    private bool IsSettingsPage()
+    {
+        var path = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        // Remove query string and fragments
+        var pathOnly = path.Split('?', '#')[0];
+        return pathOnly.Equals("settings", StringComparison.OrdinalIgnoreCase) ||
+               pathOnly.StartsWith("settings/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public void Dispose()
+    {
+        if (!_disposed)
+        {
+            NavigationManager.LocationChanged -= OnLocationChanged;
+            _disposed = true;
+        }
     }
 }

@@ -134,4 +134,114 @@ public class FileService
             return (false, $"Error: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Browse directories for folder picker with security validation
+    /// </summary>
+    /// <param name="path">Target directory path. If null or empty, uses user's Documents folder</param>
+    /// <returns>FolderBrowserResult containing current path, parent path, and list of accessible subdirectories</returns>
+    /// <remarks>
+    /// This method filters out hidden and system folders for security.
+    /// Folders without access permission are marked as inaccessible.
+    /// </remarks>
+    public FolderBrowserResult BrowseDirectories(string? path = null)
+    {
+        try
+        {
+            var targetPath = string.IsNullOrWhiteSpace(path) 
+                ? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+                : path;
+
+            // Resolve to full path and handle symlinks
+            var fullPath = Path.GetFullPath(targetPath);
+
+            // Check if path exists
+            if (!Directory.Exists(fullPath))
+            {
+                return new FolderBrowserResult
+                {
+                    Error = "Directory does not exist"
+                };
+            }
+
+            var result = new FolderBrowserResult
+            {
+                CurrentPath = fullPath
+            };
+
+            // Get parent directory if not at root
+            try
+            {
+                var parent = Directory.GetParent(fullPath);
+                if (parent != null)
+                {
+                    result.ParentPath = parent.FullName;
+                }
+            }
+            catch (Exception ex)
+            {
+                // Intentionally swallow exception: root directory has no parent, or unexpected error.
+                _logger.LogTrace(ex, "No parent directory for {FullPath} (likely root)", fullPath);
+            }
+
+            // Get subdirectories
+            try
+            {
+                var directories = Directory.GetDirectories(fullPath);
+                foreach (var dir in directories)
+                {
+                    try
+                    {
+                        var dirInfo = new DirectoryInfo(dir);
+                        
+                        // Skip hidden and system folders
+                        if (dirInfo.Attributes.HasFlag(FileAttributes.Hidden) ||
+                            dirInfo.Attributes.HasFlag(FileAttributes.System))
+                        {
+                            continue;
+                        }
+
+                        result.Folders.Add(new Models.FolderItem
+                        {
+                            Name = dirInfo.Name,
+                            FullPath = dirInfo.FullName,
+                            IsAccessible = true
+                        });
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        // Skip folders we can't access
+                        var dirName = Path.GetFileName(dir);
+                        result.Folders.Add(new Models.FolderItem
+                        {
+                            Name = dirName,
+                            FullPath = dir,
+                            IsAccessible = false
+                        });
+                    }
+                }
+
+                // Sort folders by name
+                result.Folders = result.Folders.OrderBy(f => f.Name).ToList();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return new FolderBrowserResult
+                {
+                    CurrentPath = fullPath,
+                    Error = "Access denied to this directory"
+                };
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error browsing directories: {Path}", path);
+            return new FolderBrowserResult
+            {
+                Error = $"Error: {ex.Message}"
+            };
+        }
+    }
 }
