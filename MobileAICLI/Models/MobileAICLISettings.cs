@@ -8,6 +8,12 @@ public class MobileAICLISettings
     public bool EnableCopilotMock { get; set; } = false;
     public List<string> AllowedShellCommands { get; set; } = new();
     
+    // Authentication settings
+    public bool EnableAuthentication { get; set; } = true;
+    public int SessionTimeoutMinutes { get; set; } = 30;
+    public int MaxFailedLoginAttempts { get; set; } = 5;
+    public int FailedLoginDelaySeconds { get; set; } = 1;
+    public int RateLimitResetMinutes { get; set; } = 15;
     /// <summary>
     /// Default Copilot model to use
     /// </summary>

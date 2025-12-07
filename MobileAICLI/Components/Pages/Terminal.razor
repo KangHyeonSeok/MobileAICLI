@@ -1,6 +1,8 @@
 @page "/terminal"
+@using Microsoft.AspNetCore.Authorization
 @using MobileAICLI.Services
 @inject TerminalService TerminalService
+@attribute [Authorize]
 @rendermode InteractiveServer
 
 <PageTitle>Terminal</PageTitle>

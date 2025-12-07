@@ -1,6 +1,8 @@
 @page "/testshell"
-@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
+@attribute [Authorize]
+@rendermode InteractiveServer
 @implements IAsyncDisposable
 
 <PageTitle>Shell Test</PageTitle>
