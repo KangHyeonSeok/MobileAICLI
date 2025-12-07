@@ -58,8 +58,8 @@ h1:focus {
    Desktop: >= 992px
 */
 
-/* Mobile: < 768px (Bootstrap sm) */
-@media (max-width: 767.98px) {
+/* Mobile & touch: width <= 1080px or coarse pointer */
+@media (max-width: 1080px), (pointer: coarse) {
     body {
         font-size: 16px;
     }
@@ -202,7 +202,7 @@ h1:focus {
     display: inline-block;
 }
 
-@media (max-width: 767.98px) {
+@media (max-width: 1080px), (pointer: coarse) {
     .top-bar {
         padding: 0.75rem;
     }
