@@ -3,6 +3,7 @@
 @using Microsoft.JSInterop
 @inject RepositoryContext RepositoryContext
 @inject IJSRuntime JSRuntime
+@inject ILogger<Settings> Logger
 @rendermode InteractiveServer
 
 <PageTitle>Settings - MobileAICLI</PageTitle>
@@ -109,14 +110,15 @@
                 if (!string.IsNullOrEmpty(savedPath))
                 {
                     newWorkingDirectory = savedPath;
-                    // Automatically apply saved path
+                    // Validate and apply saved path (validation happens in RepositoryContext)
+                    // Silent mode only suppresses empty path messages, not validation errors
                     await ApplyWorkingDirectory(savedPath, silent: true);
                     StateHasChanged();
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error loading from localStorage: {ex.Message}");
+                Logger.LogWarning(ex, "Error loading from localStorage");
             }
         }
     }
@@ -163,7 +165,7 @@
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error saving to localStorage: {ex.Message}");
+                Logger.LogWarning(ex, "Error saving to localStorage");
             }
             
             await LoadCurrentSettings();

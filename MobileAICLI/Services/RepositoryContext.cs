@@ -249,20 +249,37 @@ public class RepositoryContext
                 CreateNoWindow = true
             };
 
-            using var process = Process.Start(startInfo);
-            if (process == null)
-                return false;
-
-            // Use timeout to prevent hanging
-            var completedInTime = await Task.Run(() => process.WaitForExit(3000));
-            
-            if (!completedInTime)
+            Process? process = null;
+            try
             {
-                try { process.Kill(); } catch { }
-                return false;
-            }
+                process = Process.Start(startInfo);
+                if (process == null)
+                    return false;
 
-            return process.ExitCode == 0;
+                // Use timeout to prevent hanging
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                try
+                {
+                    await process.WaitForExitAsync(cts.Token);
+                    return process.ExitCode == 0;
+                }
+                catch (OperationCanceledException)
+                {
+                    try 
+                    { 
+                        process.Kill(); 
+                    } 
+                    catch (InvalidOperationException)
+                    {
+                        // Process already exited
+                    }
+                    return false;
+                }
+            }
+            finally
+            {
+                process?.Dispose();
+            }
         }
         catch (Exception ex)
         {
