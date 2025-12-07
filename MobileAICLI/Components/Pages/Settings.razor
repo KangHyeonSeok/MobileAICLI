@@ -257,6 +257,18 @@
                             <dd class="col-sm-7">@_clientInfo.Language / @_clientInfo.Platform</dd>
                             <dt class="col-sm-5">userAgent</dt>
                             <dd class="col-sm-7"><small>@_clientInfo.UserAgent</small></dd>
+
+                            @if (_clientInfo.Styles != null)
+                            {
+                                <dt class="col-sm-5 mt-2">CSS (body)</dt>
+                                <dd class="col-sm-7 mt-2">font @(_clientInfo.Styles.Body?.FontSize), line @(_clientInfo.Styles.Body?.LineHeight)</dd>
+                                <dt class="col-sm-5">CSS (button)</dt>
+                                <dd class="col-sm-7">font @(_clientInfo.Styles.Button?.FontSize), min-h @(_clientInfo.Styles.Button?.MinHeight), pad @(_clientInfo.Styles.Button?.Padding)</dd>
+                                <dt class="col-sm-5">CSS (input)</dt>
+                                <dd class="col-sm-7">font @(_clientInfo.Styles.Input?.FontSize), min-h @(_clientInfo.Styles.Input?.MinHeight), pad @(_clientInfo.Styles.Input?.Padding)</dd>
+                                <dt class="col-sm-5">CSS (select)</dt>
+                                <dd class="col-sm-7">font @(_clientInfo.Styles.Select?.FontSize), min-h @(_clientInfo.Styles.Select?.MinHeight), pad @(_clientInfo.Styles.Select?.Padding)</dd>
+                            }
                         </dl>
                     }
                 </div>
@@ -598,6 +610,27 @@
         public string? Platform { get; set; }
         public string? ViewportMeta { get; set; }
         public double? Zoom { get; set; }
+        public ClientStyles? Styles { get; set; }
+    }
+
+    private class ClientStyles
+    {
+        public StyleInfo? Body { get; set; }
+        public StyleInfo? Button { get; set; }
+        public StyleInfo? Input { get; set; }
+        public StyleInfo? Select { get; set; }
+    }
+
+    private class StyleInfo
+    {
+        public string? FontSize { get; set; }
+        public string? LineHeight { get; set; }
+        public string? MinHeight { get; set; }
+        public string? Padding { get; set; }
+        public string? PaddingTop { get; set; }
+        public string? PaddingBottom { get; set; }
+        public string? PaddingLeft { get; set; }
+        public string? PaddingRight { get; set; }
     }
 
     private RenderFragment RenderToolStatus(List<string> paths, string? diagnostic, Action<string?> onSelect, string installUrl, string? currentValue) => builder =>
