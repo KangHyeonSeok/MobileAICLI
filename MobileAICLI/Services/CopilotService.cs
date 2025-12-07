@@ -10,8 +10,7 @@ public class CopilotService
     private readonly RepositoryContext _context;
     private readonly ILogger<CopilotService> _logger;
 
-    public CopilotService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotService> logger)
-    public CopilotService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotService> logger)
+    public CopilotService(IOptionsSnapshot<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotService> logger)
     {
         _settings = settings.Value;
         _context = context;

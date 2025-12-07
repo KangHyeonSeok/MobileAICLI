@@ -15,7 +15,6 @@ public class ShellStreamingService
     private readonly ILogger<ShellStreamingService> _logger;
 
     public ShellStreamingService(RepositoryContext context, ILogger<ShellStreamingService> logger)
-    public ShellStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<ShellStreamingService> logger)
     {
         _context = context;
         _logger = logger;

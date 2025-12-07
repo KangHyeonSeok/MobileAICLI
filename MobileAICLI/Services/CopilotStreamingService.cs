@@ -16,8 +16,7 @@ public class CopilotStreamingService
     private readonly RepositoryContext _context;
     private readonly ILogger<CopilotStreamingService> _logger;
 
-    public CopilotStreamingService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotStreamingService> logger)
-    public CopilotStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
+    public CopilotStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotStreamingService> logger)
     {
         _settings = settings.Value;
         _context = context;
@@ -380,10 +379,6 @@ public class CopilotStreamingService
                     startInfo.ArgumentList.Add("--allow-all-tools");
                     // Allow local modifications
                     // startInfo.ArgumentList.Add("--allow-local-changes");
-                    break;
-                case "full":
-                    // Allow all tools
-                    // startInfo.ArgumentList.Add("--allow-all-tools");
                     break;
             }
         }
