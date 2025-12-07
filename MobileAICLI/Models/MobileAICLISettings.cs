@@ -17,4 +17,25 @@ public class MobileAICLISettings
     /// List of allowed Copilot models for security validation
     /// </summary>
     public List<string> AllowedCopilotModels { get; set; } = new() { "default", "gpt-4", "gpt-3.5-turbo", "claude-3.5-sonnet" };
+
+    /// <summary>
+    /// Validates model name and returns default value if model is not allowed
+    /// </summary>
+    public string ValidateModel(string? model)
+    {
+        // Use default model if no model is specified or empty
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            return CopilotModel;
+        }
+
+        // Check if model is in allowed list
+        if (AllowedCopilotModels.Contains(model, StringComparer.OrdinalIgnoreCase))
+        {
+            return model;
+        }
+
+        // Use default model if model is not allowed (caller should log warning)
+        return CopilotModel;
+    }
 }

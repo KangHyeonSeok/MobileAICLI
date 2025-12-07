@@ -140,7 +140,7 @@ public class CopilotStreamingService
 
         var channel = Channel.CreateUnbounded<CopilotOutput>();
 
-        // 모델 검증 및 기본값 설정
+        // Model validation and default value setting
         var validatedModel = ValidateAndGetModel(model);
 
         if (_settings.EnableCopilotMock)
@@ -295,32 +295,32 @@ public class CopilotStreamingService
             WorkingDirectory = GetSafeWorkingDirectory()
         };
 
-        // Programmatic 모드: copilot -p "prompt" --silent
+        // Programmatic mode: copilot -p "prompt" --silent
         startInfo.ArgumentList.Add("-p");
         startInfo.ArgumentList.Add(prompt);
-        startInfo.ArgumentList.Add("--silent"); // 스크립팅용 출력 (응답만)
+        startInfo.ArgumentList.Add("--silent"); // Scripting output (response only)
         
-        // 모델 선택 (default가 아닌 경우에만 추가)
+        // Model selection (only add if not default)
         if (!string.IsNullOrEmpty(model) && model != "default")
         {
             startInfo.ArgumentList.Add("--model");
             startInfo.ArgumentList.Add(model);
         }
         
-        // 작업 디렉토리 접근 허용
+        // Allow working directory access
         startInfo.ArgumentList.Add("--add-dir");
         startInfo.ArgumentList.Add(GetSafeWorkingDirectory());
 
-        // 도구 설정 적용
+        // Apply tool settings
         if (toolSettings != null)
         {
             ApplyToolSettings(startInfo, toolSettings);
         }
         else
         {
-            // 기본값: 안전 모드 (읽기만 허용)
-            // 도구 자동 승인 없이 실행하면 대화형으로 물어봄
-            // Non-interactive 모드에서는 도구 사용 불가하거나 명시적 허용 필요
+            // Default: safe mode (read-only)
+            // Without auto-approval, tools will prompt interactively
+            // In non-interactive mode, tools are disabled or require explicit approval
         }
 
         return startInfo;
@@ -328,23 +328,23 @@ public class CopilotStreamingService
 
     private void ApplyToolSettings(ProcessStartInfo startInfo, CopilotToolSettings settings)
     {
-        // 도구 승인 프리셋에 따른 옵션 추가
-        // Phase 1.2에서 상세 구현
-        // 예: --allow-tool, --deny-tool 등
+        // Apply options based on tool approval preset
+        // Detailed implementation in Phase 1.2
+        // Example: --allow-tool, --deny-tool, etc.
         
         if (!string.IsNullOrEmpty(settings.Preset))
         {
             switch (settings.Preset.ToLowerInvariant())
             {
                 case "safe":
-                    // 읽기 전용 - 기본값, 추가 옵션 없음
+                    // Read-only - default, no additional options
                     break;
                 case "moderate":
-                    // 로컬 수정 허용
+                    // Allow local modifications
                     // startInfo.ArgumentList.Add("--allow-local-changes");
                     break;
                 case "full":
-                    // 모든 도구 허용
+                    // Allow all tools
                     // startInfo.ArgumentList.Add("--allow-all-tools");
                     break;
             }
@@ -386,27 +386,20 @@ public class CopilotStreamingService
     }
 
     /// <summary>
-    /// 모델 이름을 검증하고 허용된 모델이 아닌 경우 기본값 반환
+    /// Validates model name and returns default value if model is not allowed
     /// </summary>
     private string ValidateAndGetModel(string? model)
     {
-        // 모델이 지정되지 않았거나 비어있으면 기본값 사용
-        if (string.IsNullOrWhiteSpace(model))
-        {
-            return _settings.CopilotModel;
-        }
-
-        // 허용된 모델 목록에 있는지 확인
-        if (_settings.AllowedCopilotModels.Contains(model, StringComparer.OrdinalIgnoreCase))
-        {
-            return model;
-        }
-
-        // 허용되지 않은 모델인 경우 경고 로그와 함께 기본값 사용
-        _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
-            model, _settings.CopilotModel);
+        var validatedModel = _settings.ValidateModel(model);
         
-        return _settings.CopilotModel;
+        // Log warning if model was not allowed and fallback occurred
+        if (!string.IsNullOrWhiteSpace(model) && validatedModel != model)
+        {
+            _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+                model, _settings.CopilotModel);
+        }
+        
+        return validatedModel;
     }
 
     private static string TruncateForLog(string text, int maxLength = 100)

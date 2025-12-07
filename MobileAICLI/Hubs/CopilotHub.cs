@@ -23,7 +23,7 @@ public class CopilotHub : Hub
     }
 
     /// <summary>
-    /// Copilot에 프롬프트 전송
+    /// Send prompt to Copilot
     /// </summary>
     public async Task SendPrompt(string prompt, CopilotToolSettings? toolSettings = null, string? model = null)
     {

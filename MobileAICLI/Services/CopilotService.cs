@@ -154,26 +154,19 @@ public class CopilotService
     }
 
     /// <summary>
-    /// 모델 이름을 검증하고 허용된 모델이 아닌 경우 기본값 반환
+    /// Validates model name and returns default value if model is not allowed
     /// </summary>
     private string ValidateAndGetModel(string? model)
     {
-        // 모델이 지정되지 않았거나 비어있으면 기본값 사용
-        if (string.IsNullOrWhiteSpace(model))
-        {
-            return _settings.CopilotModel;
-        }
-
-        // 허용된 모델 목록에 있는지 확인
-        if (_settings.AllowedCopilotModels.Contains(model, StringComparer.OrdinalIgnoreCase))
-        {
-            return model;
-        }
-
-        // 허용되지 않은 모델인 경우 경고 로그와 함께 기본값 사용
-        _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
-            model, _settings.CopilotModel);
+        var validatedModel = _settings.ValidateModel(model);
         
-        return _settings.CopilotModel;
+        // Log warning if model was not allowed and fallback occurred
+        if (!string.IsNullOrWhiteSpace(model) && validatedModel != model)
+        {
+            _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+                model, _settings.CopilotModel);
+        }
+        
+        return validatedModel;
     }
 }
