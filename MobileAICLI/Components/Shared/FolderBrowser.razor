@@ -126,12 +126,18 @@
     private string? parentPath;
     private List<FolderItem> folders = new();
     private string? errorMessage;
+    private string? lastInitialPath;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (IsVisible && string.IsNullOrEmpty(currentPath))
+        if (IsVisible)
         {
-            await LoadPath(InitialPath);
+            // Reload if first load or InitialPath has changed
+            if (string.IsNullOrEmpty(currentPath) || lastInitialPath != InitialPath)
+            {
+                await LoadPath(InitialPath);
+                lastInitialPath = InitialPath;
+            }
         }
     }
 
