@@ -54,7 +54,7 @@
                 <button class="btn btn-xs btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)" title="Refresh">
                     🔄
                 </button>
-                <button class="btn btn-xs btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)" title="Clear">
+                <button class="btn btn-xs btn-outline-danger" @onclick="ClearHistory" disabled="@(messages.Count == 0)" title="Clear" aria-label="Clear chat history">
                     🗑️
                 </button>
             </div>
