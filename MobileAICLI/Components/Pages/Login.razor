@@ -1,0 +1,117 @@
+@page "/login"
+@using Microsoft.JSInterop
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Login - MobileAICLI</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card">
+                <div class="card-body">
+                    <h3 class="card-title text-center mb-4">
+                        <i class="bi bi-shield-lock"></i> MobileAICLI Login
+                    </h3>
+
+                    @if (!string.IsNullOrEmpty(_errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            @_errorMessage
+                        </div>
+                    }
+
+                    <EditForm Model="@_loginModel" OnValidSubmit="HandleLogin">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="text-danger" />
+
+                        <div class="mb-3">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" 
+                                   class="form-control" 
+                                   id="password" 
+                                   @bind="_loginModel.Password"
+                                   disabled="@_isLoading"
+                                   placeholder="Enter password" />
+                        </div>
+
+                        <div class="d-grid">
+                            <button type="submit" 
+                                    class="btn btn-primary" 
+                                    disabled="@_isLoading">
+                                @if (_isLoading)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    <span>Authenticating...</span>
+                                }
+                                else
+                                {
+                                    <span>Login</span>
+                                }
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <div class="alert alert-info mt-3" role="alert">
+                <small>
+                    <strong>Note:</strong> Set the <code>MOBILEAICLI_PASSWORD_HASH</code> environment variable to configure authentication.
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginModel _loginModel = new();
+    private string? _errorMessage;
+    private bool _isLoading;
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private async Task HandleLogin()
+    {
+        _isLoading = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            // Use JavaScript helper to call the API to ensure cookies are handled properly
+            var result = await JSRuntime.InvokeAsync<LoginResponse>("authHelper.login", _loginModel.Password);
+            
+            if (result?.Success == true)
+            {
+                // Redirect to return URL or home
+                var redirectUrl = string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl;
+                Navigation.NavigateTo(redirectUrl, forceLoad: true);
+            }
+            else
+            {
+                _errorMessage = result?.Error ?? "Authentication failed";
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"An error occurred during authentication: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private class LoginModel
+    {
+        public string Password { get; set; } = string.Empty;
+    }
+
+    private class LoginResponse
+    {
+        public bool Success { get; set; }
+        public string? Error { get; set; }
+    }
+}

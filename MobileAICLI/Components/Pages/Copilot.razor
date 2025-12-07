@@ -1,16 +1,20 @@
 @page "/copilot"
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.SignalR.Client
 @using MobileAICLI.Services
+@using MobileAICLI.Models
 @inject NavigationManager NavigationManager
+@inject LocalStorageService LocalStorage
 @implements IAsyncDisposable
+@attribute [Authorize]
 @rendermode InteractiveServer
 
 <PageTitle>GitHub Copilot</PageTitle>
 
 <div class="copilot-container d-flex flex-column" style="height: calc(100vh - 100px);">
-    @* 상태 표시 바 *@
+    @* Status bar *@
     <div class="status-bar px-3 py-2 border-bottom bg-light">
-        <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
             <div class="d-flex align-items-center gap-2">
                 <span class="status-indicator @(isConnected ? "bg-success" : "bg-danger")"></span>
                 <small class="text-muted">
@@ -21,6 +25,10 @@
                         {
                             <span> • @copilotUser</span>
                         }
+                        @if (!string.IsNullOrEmpty(currentModel))
+                        {
+                            <span> • Model: @currentModel</span>
+                        }
                     }
                     else
                     {
@@ -28,9 +36,23 @@
                     }
                 </small>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
-                <i class="bi bi-arrow-clockwise"></i> Check Status
-            </button>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-secondary" @onclick="OpenSettings">
+                    ⚙️ Settings
+                </button>
+            <div class="d-flex align-items-center gap-2">
+                <select class="form-select form-select-sm" style="width: auto;" 
+                        @bind="selectedModel" 
+                        disabled="@(!isConnected || isLoading)">
+                    @foreach (var model in allowedModels)
+                    {
+                        <option value="@model">@model</option>
+                    }
+                </select>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="CheckCopilotStatus" disabled="@(!isConnected)">
+                    <i class="bi bi-arrow-clockwise"></i> Check Status
+                </button>
+            </div>
         </div>
         @if (!string.IsNullOrEmpty(statusError))
         {
@@ -114,6 +136,12 @@
     </div>
 </div>
 
+@* 설정 패널 *@
+<CopilotSettingsPanel Settings="copilotSettings" 
+                      IsVisible="showSettingsPanel"
+                      OnSave="HandleSettingsSave"
+                      OnCancel="HandleSettingsCancel" />
+
 <style>
     .status-indicator {
         width: 8px;
@@ -159,10 +187,50 @@
     private string? statusError;
     private ElementReference chatContainer;
     private ChatMessage? currentStreamingMessage;
+    private CopilotSettings copilotSettings = new();
+    private bool showSettingsPanel = false;
+    private string selectedModel = "default";
+    private string currentModel = "default";
+    private List<string> allowedModels = new() { "default" };
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadSettings();
         await InitializeHubConnection();
+    }
+
+    private async Task LoadSettings()
+    {
+        var saved = await LocalStorage.GetItemAsync<CopilotSettings>("copilot-settings");
+        if (saved != null)
+        {
+            copilotSettings = saved;
+        }
+        else
+        {
+            // 기본값: Medium 프리셋
+            copilotSettings.ApplyPreset("medium");
+        }
+    }
+
+    private void OpenSettings()
+    {
+        showSettingsPanel = true;
+    }
+
+    private async Task HandleSettingsSave(CopilotSettings settings)
+    {
+        copilotSettings = settings;
+        await LocalStorage.SetItemAsync("copilot-settings", settings);
+        showSettingsPanel = false;
+        StateHasChanged();
+    }
+
+    private Task HandleSettingsCancel()
+    {
+        showSettingsPanel = false;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private async Task InitializeHubConnection()
@@ -264,6 +332,18 @@
                 statusError = result.Error ?? "Copilot CLI is not properly configured";
                 copilotUser = null;
             }
+
+            // Update model information
+            currentModel = result.CurrentModel ?? "default";
+            if (result.AllowedModels?.Count > 0)
+            {
+                allowedModels = result.AllowedModels;
+                // Set selected model to current model if available
+                if (allowedModels.Contains(currentModel))
+                {
+                    selectedModel = currentModel;
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -302,7 +382,15 @@
 
         try
         {
-            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null);
+            // CopilotSettings를 CopilotToolSettings로 변환
+            var toolSettings = new CopilotToolSettings 
+            { 
+                CopilotSettings = copilotSettings 
+            };
+            await hubConnection.SendAsync("SendPrompt", prompt, toolSettings);
+            // Validate selected model against allowed list
+            var modelToUse = allowedModels.Contains(selectedModel) ? selectedModel : currentModel;
+            await hubConnection.SendAsync("SendPrompt", prompt, (CopilotToolSettings?)null, modelToUse);
         }
         catch (Exception ex)
         {
@@ -360,5 +448,7 @@
         public bool Authenticated { get; set; }
         public string? User { get; set; }
         public string? Error { get; set; }
+        public string? CurrentModel { get; set; }
+        public List<string>? AllowedModels { get; set; }
     }
 }

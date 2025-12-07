@@ -1,0 +1,233 @@
+@using MobileAICLI.Models
+
+<div class="modal fade @(IsVisible ? "show" : "")" style="display: @(IsVisible ? "block" : "none");" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔧 Copilot 설정 패널</h5>
+                <button type="button" class="btn-close" @onclick="Cancel"></button>
+            </div>
+            <div class="modal-body">
+                @* 프리셋 버튼 *@
+                <div class="mb-4">
+                    <label class="form-label fw-bold">빠른 설정 (프리셋)</label>
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-outline-success" @onclick="ApplySafePreset">
+                            안전 (Safe)
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" @onclick="ApplyMediumPreset">
+                            중간 (Medium)
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" @onclick="ApplyFullPreset">
+                            전체 (Full) ⚠️
+                        </button>
+                    </div>
+                    <small class="text-muted d-block mt-1">
+                        안전: 읽기만 허용 | 중간: 로컬 수정 허용 (기본) | 전체: 모든 도구 허용 (위험)
+                    </small>
+                </div>
+
+                @* GITHUB_TOKEN 인증 방식 *@
+                <div class="mb-4">
+                    <label class="form-label fw-bold">🛡️ GITHUB_TOKEN 인증 방식</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="tokenMode" id="tokenModeSystem" 
+                               checked="@(Settings.TokenMode == GithubTokenMode.System)"
+                               @onchange="@(() => Settings.TokenMode = GithubTokenMode.System)">
+                        <label class="form-check-label" for="tokenModeSystem">
+                            시스템 값 사용 (기본)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="tokenMode" id="tokenModeCustom"
+                               checked="@(Settings.TokenMode == GithubTokenMode.Custom)"
+                               @onchange="@(() => Settings.TokenMode = GithubTokenMode.Custom)">
+                        <label class="form-check-label" for="tokenModeCustom">
+                            직접 입력 (아래 입력란 사용)
+                        </label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="tokenMode" id="tokenModeNone"
+                               checked="@(Settings.TokenMode == GithubTokenMode.None)"
+                               @onchange="@(() => Settings.TokenMode = GithubTokenMode.None)">
+                        <label class="form-check-label" for="tokenModeNone">
+                            무시 (토큰 없이 실행)
+                        </label>
+                    </div>
+                    @if (Settings.TokenMode == GithubTokenMode.Custom)
+                    {
+                        <div class="mt-2">
+                            <input type="password" class="form-control" placeholder="GitHub Token 입력"
+                                   @bind="Settings.TokenValue">
+                        </div>
+                    }
+                </div>
+
+                @* 작업 디렉토리 *@
+                <div class="mb-4">
+                    <label class="form-label fw-bold">📁 작업 디렉토리</label>
+                    <input type="text" class="form-control" placeholder="예: ~/Documents"
+                           @bind="Settings.WorkingDirectory">
+                    <small class="text-muted">
+                        비어있으면 OS별 기본 Documents 디렉토리 사용
+                    </small>
+                </div>
+
+                @* 모든 도구 허용 (위험) *@
+                <div class="mb-4">
+                    <label class="form-label fw-bold text-danger">⚠️ 전체 허용 (위험)</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="allowAll"
+                               @bind="Settings.AllowAll">
+                        <label class="form-check-label text-danger" for="allowAll">
+                            모든 도구 허용 (--allow-all-tools)
+                        </label>
+                    </div>
+                    @if (Settings.AllowAll)
+                    {
+                        <div class="alert alert-danger mt-2 mb-0" role="alert">
+                            <strong>⚠️ 경고:</strong> 모든 도구를 허용하면 Copilot이 파일 삭제, 시스템 명령 실행 등을 승인 없이 수행할 수 있습니다. 신뢰할 수 있는 환경에서만 사용하세요.
+                        </div>
+                    }
+                </div>
+
+                @if (!Settings.AllowAll)
+                {
+                    @* 개별 도구 권한 설정 *@
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">📝 파일 작업</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="fileRead" @bind="Settings.FileRead">
+                            <label class="form-check-label" for="fileRead">파일 읽기 (cat, head, tail, less)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="fileWrite" @bind="Settings.FileWrite">
+                            <label class="form-check-label" for="fileWrite">파일 쓰기 (write)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-danger" type="checkbox" id="fileDelete" @bind="Settings.FileDelete">
+                            <label class="form-check-label text-danger" for="fileDelete">⚠️ 위험: 파일 삭제 (rm)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">🔀 Git 작업</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="gitStatus" @bind="Settings.GitStatus">
+                            <label class="form-check-label" for="gitStatus">Git 상태 (status, log, diff)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="gitBranch" @bind="Settings.GitBranch">
+                            <label class="form-check-label" for="gitBranch">Git 브랜치 (branch, checkout)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="gitCommit" @bind="Settings.GitCommit">
+                            <label class="form-check-label" for="gitCommit">Git 커밋 (add, commit)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-warning" type="checkbox" id="gitPush" @bind="Settings.GitPush">
+                            <label class="form-check-label text-warning" for="gitPush">⚠️ 원격: Git 푸시 (push)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-danger" type="checkbox" id="gitForce" @bind="Settings.GitForce">
+                            <label class="form-check-label text-danger" for="gitForce">⚠️ 위험: Git 강제 (reset)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">🔗 GitHub PR/Issue</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="prRead" @bind="Settings.PrRead">
+                            <label class="form-check-label" for="prRead">PR/Issue 조회 (list)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-warning" type="checkbox" id="prWrite" @bind="Settings.PrWrite">
+                            <label class="form-check-label text-warning" for="prWrite">⚠️ 원격: PR 생성 (create)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-warning" type="checkbox" id="issueWrite" @bind="Settings.IssueWrite">
+                            <label class="form-check-label text-warning" for="issueWrite">⚠️ 원격: Issue 생성 (create)</label>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">💻 쉘 명령</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="shellBasic" @bind="Settings.ShellBasic">
+                            <label class="form-check-label" for="shellBasic">기본 쉘 (ls, pwd, echo, find)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-warning" type="checkbox" id="shellPackage" @bind="Settings.ShellPackage">
+                            <label class="form-check-label text-warning" for="shellPackage">⚠️ 주의: 패키지 설치 (npm, pip, yarn)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input text-danger" type="checkbox" id="shellSystem" @bind="Settings.ShellSystem">
+                            <label class="form-check-label text-danger" for="shellSystem">⚠️ 위험: 시스템 명령 (모든 shell)</label>
+                        </div>
+                    </div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" @onclick="Reset">초기화</button>
+                <button type="button" class="btn btn-secondary" @onclick="Cancel">취소</button>
+                <button type="button" class="btn btn-primary" @onclick="Save">저장</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (IsVisible)
+{
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Parameter]
+    public CopilotSettings Settings { get; set; } = new();
+
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public EventCallback<CopilotSettings> OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private void ApplySafePreset()
+    {
+        Settings.ApplyPreset("safe");
+        StateHasChanged();
+    }
+
+    private void ApplyMediumPreset()
+    {
+        Settings.ApplyPreset("medium");
+        StateHasChanged();
+    }
+
+    private void ApplyFullPreset()
+    {
+        Settings.ApplyPreset("full");
+        StateHasChanged();
+    }
+
+    private async Task Save()
+    {
+        await OnSave.InvokeAsync(Settings);
+    }
+
+    private async Task Cancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+    private void Reset()
+    {
+        Settings.ApplyPreset("medium");
+        Settings.TokenMode = GithubTokenMode.System;
+        Settings.TokenValue = string.Empty;
+        Settings.WorkingDirectory = string.Empty;
+        StateHasChanged();
+    }
+}

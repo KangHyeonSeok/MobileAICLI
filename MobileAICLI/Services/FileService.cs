@@ -8,7 +8,7 @@ public class FileService
     private readonly RepositoryContext _context;
     private readonly ILogger<FileService> _logger;
 
-    public FileService(RepositoryContext context, ILogger<FileService> logger)
+    public FileService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<FileService> logger)
     {
         _context = context;
         _logger = logger;

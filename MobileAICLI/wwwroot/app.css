@@ -84,3 +84,34 @@ h1:focus {
     vertical-align: -.125em;
     fill: currentColor;
 }
+
+/* Authentication top bar */
+.top-bar {
+    padding: 0.5rem 1rem;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+.auth-status {
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+    .top-bar {
+        padding: 0.5rem;
+    }
+    
+    .auth-status {
+        font-size: 0.8rem;
+    }
+    
+    .auth-status .btn {
+        width: auto;
+        margin-bottom: 0;
+    }
+}

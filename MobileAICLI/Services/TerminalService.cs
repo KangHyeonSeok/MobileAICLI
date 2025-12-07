@@ -10,7 +10,7 @@ public class TerminalService
     private readonly RepositoryContext _context;
     private readonly ILogger<TerminalService> _logger;
 
-    public TerminalService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<TerminalService> logger)
+    public TerminalService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<TerminalService> logger)
     {
         _settings = settings.Value;
         _context = context;

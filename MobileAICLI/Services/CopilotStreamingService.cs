@@ -17,6 +17,7 @@ public class CopilotStreamingService
     private readonly ILogger<CopilotStreamingService> _logger;
 
     public CopilotStreamingService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotStreamingService> logger)
+    public CopilotStreamingService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotStreamingService> logger)
     {
         _settings = settings.Value;
         _context = context;
@@ -121,15 +122,16 @@ public class CopilotStreamingService
     }
 
     /// <summary>
-    /// Copilot에 프롬프트를 보내고 응답을 실시간으로 스트리밍
+    /// Send prompt to Copilot and stream response in real-time
     /// </summary>
     public async IAsyncEnumerable<CopilotOutput> SendPromptStreamingAsync(
         string prompt,
         CopilotToolSettings? toolSettings = null,
+        string? model = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default,
         int timeoutSeconds = 120)
     {
-        // 프롬프트 검증
+        // Prompt validation
         if (string.IsNullOrWhiteSpace(prompt))
         {
             yield return CopilotOutput.Error("Prompt cannot be empty");
@@ -141,17 +143,20 @@ public class CopilotStreamingService
 
         var channel = Channel.CreateUnbounded<CopilotOutput>();
 
+        // Model validation and default value setting
+        var validatedModel = ValidateAndGetModel(model);
+
         if (_settings.EnableCopilotMock)
         {
-            _ = ExecuteMockProcessAsync(prompt, channel.Writer, cancellationToken);
+            _ = ExecuteMockProcessAsync(prompt, validatedModel, channel.Writer, cancellationToken);
         }
         else
         {
-            // 백그라운드에서 프로세스 실행
-            _ = ExecuteCopilotProcessAsync(prompt, toolSettings, channel.Writer, timeoutSeconds, cancellationToken);
+            // Execute process in background
+            _ = ExecuteCopilotProcessAsync(prompt, toolSettings, validatedModel, channel.Writer, timeoutSeconds, cancellationToken);
         }
 
-        // 채널에서 결과 읽기
+        // Read results from channel
         await foreach (var output in channel.Reader.ReadAllAsync(cancellationToken))
         {
             yield return output;
@@ -160,6 +165,7 @@ public class CopilotStreamingService
 
     private async Task ExecuteMockProcessAsync(
         string prompt,
+        string model,
         ChannelWriter<CopilotOutput> writer,
         CancellationToken cancellationToken)
     {
@@ -167,7 +173,7 @@ public class CopilotStreamingService
         {
             await Task.Delay(500, cancellationToken); // Thinking time
             
-            var mockResponse = $"[MOCK] Copilot response for: {prompt}\n\nThis is a simulated response because EnableCopilotMock is set to true.\n\n- Item 1\n- Item 2\n- Item 3";
+            var mockResponse = $"[MOCK] Copilot response (Model: {model}) for: {prompt}\n\nThis is a simulated response because EnableCopilotMock is set to true.\n\n- Item 1\n- Item 2\n- Item 3";
             
             // Simulate streaming
             foreach (var word in mockResponse.Split(' '))
@@ -192,6 +198,7 @@ public class CopilotStreamingService
     private async Task ExecuteCopilotProcessAsync(
         string prompt,
         CopilotToolSettings? toolSettings,
+        string model,
         ChannelWriter<CopilotOutput> writer,
         int timeoutSeconds,
         CancellationToken cancellationToken)
@@ -199,7 +206,7 @@ public class CopilotStreamingService
         Process? process = null;
         try
         {
-            var startInfo = CreateCopilotProcessStartInfo(prompt, toolSettings);
+            var startInfo = CreateCopilotProcessStartInfo(prompt, toolSettings, model);
             process = new Process { StartInfo = startInfo };
 
             process.Start();
@@ -277,9 +284,13 @@ public class CopilotStreamingService
         }
     }
 
-    private ProcessStartInfo CreateCopilotProcessStartInfo(string prompt, CopilotToolSettings? toolSettings)
+    private ProcessStartInfo CreateCopilotProcessStartInfo(string prompt, CopilotToolSettings? toolSettings, string model)
     {
         var executable = GetCopilotExecutable();
+        
+        // 작업 디렉토리 결정
+        var workingDir = toolSettings?.CopilotSettings?.WorkingDirectory;
+        var finalWorkingDir = GetSafeWorkingDirectory(workingDir);
         
         var startInfo = new ProcessStartInfo
         {
@@ -288,28 +299,35 @@ public class CopilotStreamingService
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true,
-            WorkingDirectory = GetSafeWorkingDirectory()
+            WorkingDirectory = finalWorkingDir
         };
 
-        // Programmatic 모드: copilot -p "prompt" --silent
+        // Programmatic mode: copilot -p "prompt" --silent
         startInfo.ArgumentList.Add("-p");
         startInfo.ArgumentList.Add(prompt);
-        startInfo.ArgumentList.Add("--silent"); // 스크립팅용 출력 (응답만)
+        startInfo.ArgumentList.Add("--silent"); // Scripting output (response only)
         
-        // 작업 디렉토리 접근 허용
+        // Model selection (only add if not default)
+        if (!string.IsNullOrEmpty(model) && model != "default")
+        {
+            startInfo.ArgumentList.Add("--model");
+            startInfo.ArgumentList.Add(model);
+        }
+        
+        // Allow working directory access
         startInfo.ArgumentList.Add("--add-dir");
-        startInfo.ArgumentList.Add(GetSafeWorkingDirectory());
+        startInfo.ArgumentList.Add(finalWorkingDir);
 
-        // 도구 설정 적용
+        // Apply tool settings
         if (toolSettings != null)
         {
             ApplyToolSettings(startInfo, toolSettings);
         }
         else
         {
-            // 기본값: 안전 모드 (읽기만 허용)
-            // 도구 자동 승인 없이 실행하면 대화형으로 물어봄
-            // Non-interactive 모드에서는 도구 사용 불가하거나 명시적 허용 필요
+            // Default: safe mode (read-only)
+            // Without auto-approval, tools will prompt interactively
+            // In non-interactive mode, tools are disabled or require explicit approval
         }
 
         return startInfo;
@@ -317,27 +335,94 @@ public class CopilotStreamingService
 
     private void ApplyToolSettings(ProcessStartInfo startInfo, CopilotToolSettings settings)
     {
-        // 도구 승인 프리셋에 따른 옵션 추가
-        // Phase 1.2에서 상세 구현
-        // 예: --allow-tool, --deny-tool 등
+        // Phase 1.2: 상세 설정 적용
+        if (settings.CopilotSettings != null)
+        {
+            var copilotSettings = settings.CopilotSettings;
+            
+            // CLI 옵션 추가
+            var cliOptions = copilotSettings.BuildCliOptions();
+            if (!string.IsNullOrWhiteSpace(cliOptions))
+            {
+                // 공백으로 분리된 옵션들을 개별 인자로 추가
+                foreach (var option in SplitCliOptions(cliOptions))
+                {
+                    startInfo.ArgumentList.Add(option);
+                }
+            }
+            
+            // GitHub 토큰 환경변수 설정
+            var (tokenKey, tokenValue) = copilotSettings.GetGithubTokenEnv();
+            if (tokenKey != null)
+            {
+                startInfo.Environment[tokenKey] = tokenValue ?? string.Empty;
+            }
+            
+            return;
+        }
+        // Apply options based on tool approval preset
+        // Detailed implementation in Phase 1.2
+        // Example: --allow-tool, --deny-tool, etc.
         
+        // 레거시: 프리셋 기반 설정
         if (!string.IsNullOrEmpty(settings.Preset))
         {
             switch (settings.Preset.ToLowerInvariant())
             {
                 case "safe":
-                    // 읽기 전용 - 기본값, 추가 옵션 없음
+                    // Read-only - default, no additional options
                     break;
                 case "moderate":
                     // 로컬 수정 허용
-                    // startInfo.ArgumentList.Add("--allow-local-changes");
                     break;
                 case "full":
                     // 모든 도구 허용
+                    startInfo.ArgumentList.Add("--allow-all-tools");
+                    // Allow local modifications
+                    // startInfo.ArgumentList.Add("--allow-local-changes");
+                    break;
+                case "full":
+                    // Allow all tools
                     // startInfo.ArgumentList.Add("--allow-all-tools");
                     break;
             }
         }
+    }
+    
+    private static string[] SplitCliOptions(string options)
+    {
+        // --allow-tool 'shell(cat)' --allow-tool 'write' 형태를 파싱
+        var result = new List<string>();
+        var current = new System.Text.StringBuilder();
+        bool inQuotes = false;
+        
+        foreach (var ch in options)
+        {
+            if (ch == '\'')
+            {
+                inQuotes = !inQuotes;
+                current.Append(ch);
+            }
+            else if (ch == ' ' && !inQuotes)
+            {
+                if (current.Length > 0)
+                {
+                    result.Add(current.ToString());
+                    current.Clear();
+                }
+            }
+            else
+            {
+                current.Append(ch);
+            }
+        }
+        
+        if (current.Length > 0)
+        {
+            result.Add(current.ToString());
+        }
+        
+        return result.ToArray();
     }
 
     private string GetCopilotExecutable()
@@ -355,15 +440,29 @@ public class CopilotStreamingService
         return command.Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
     }
 
-    private string GetSafeWorkingDirectory()
+    private string GetSafeWorkingDirectory(string? customPath = null)
     {
         try
         {
             var workingDir = _context.GetAbsolutePath();
             
             if (Directory.Exists(workingDir))
+            // 커스텀 경로가 지정되었으면 우선 사용
+            if (!string.IsNullOrWhiteSpace(customPath) && Directory.Exists(customPath))
+            {
+                return customPath;
+            }
+            
+            if (!string.IsNullOrWhiteSpace(_settings.RepositoryPath) && Directory.Exists(_settings.RepositoryPath))
             {
                 return workingDir;
+            }
+
+            // OS별 기본 Documents 디렉토리
+            var documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (!string.IsNullOrWhiteSpace(documentsPath) && Directory.Exists(documentsPath))
+            {
+                return documentsPath;
             }
 
             var fallback = Environment.CurrentDirectory;
@@ -374,6 +473,23 @@ public class CopilotStreamingService
         {
             return Environment.CurrentDirectory;
         }
+    }
+
+    /// <summary>
+    /// Validates model name and returns default value if model is not allowed
+    /// </summary>
+    private string ValidateAndGetModel(string? model)
+    {
+        var validatedModel = _settings.ValidateModel(model);
+        
+        // Log warning if model was not allowed and fallback occurred
+        if (!string.IsNullOrWhiteSpace(model) && validatedModel != model)
+        {
+            _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+                model, _settings.CopilotModel);
+        }
+        
+        return validatedModel;
     }
 
     private static string TruncateForLog(string text, int maxLength = 100)
@@ -425,4 +541,9 @@ public class CopilotToolSettings
     /// 차단된 도구 목록
     /// </summary>
     public List<string> DeniedTools { get; set; } = new();
+
+    /// <summary>
+    /// 상세 설정 (Phase 1.2)
+    /// </summary>
+    public MobileAICLI.Models.CopilotSettings? CopilotSettings { get; set; }
 }

@@ -11,13 +11,14 @@ public class CopilotService
     private readonly ILogger<CopilotService> _logger;
 
     public CopilotService(IOptions<MobileAICLISettings> settings, RepositoryContext context, ILogger<CopilotService> logger)
+    public CopilotService(IOptionsSnapshot<MobileAICLISettings> settings, ILogger<CopilotService> logger)
     {
         _settings = settings.Value;
         _context = context;
         _logger = logger;
     }
 
-    public async Task<(bool Success, string Output, string Error)> AskCopilotAsync(string prompt)
+    public async Task<(bool Success, string Output, string Error)> AskCopilotAsync(string prompt, string? model = null)
     {
         try
         {
@@ -48,6 +49,15 @@ public class CopilotService
                 startInfo.ArgumentList.Add(commandParts[i]);
             }
             startInfo.ArgumentList.Add("suggest");
+            
+            // Add model parameter if specified and not default
+            var validatedModel = ValidateAndGetModel(model);
+            if (!string.IsNullOrEmpty(validatedModel) && validatedModel != "default")
+            {
+                startInfo.ArgumentList.Add("--model");
+                startInfo.ArgumentList.Add(validatedModel);
+            }
+            
             startInfo.ArgumentList.Add(prompt);
 
             using var process = new Process { StartInfo = startInfo };
@@ -77,7 +87,7 @@ public class CopilotService
         }
     }
 
-    public async Task<(bool Success, string Output, string Error)> ExplainCommandAsync(string command)
+    public async Task<(bool Success, string Output, string Error)> ExplainCommandAsync(string command, string? model = null)
     {
         try
         {
@@ -108,6 +118,15 @@ public class CopilotService
                 startInfo.ArgumentList.Add(commandParts[i]);
             }
             startInfo.ArgumentList.Add("explain");
+            
+            // Add model parameter if specified and not default
+            var validatedModel = ValidateAndGetModel(model);
+            if (!string.IsNullOrEmpty(validatedModel) && validatedModel != "default")
+            {
+                startInfo.ArgumentList.Add("--model");
+                startInfo.ArgumentList.Add(validatedModel);
+            }
+            
             startInfo.ArgumentList.Add(command);
 
             using var process = new Process { StartInfo = startInfo };
@@ -135,5 +154,22 @@ public class CopilotService
             _logger.LogError(ex, "Error executing Copilot explain for command: {Command}", command);
             return (false, string.Empty, $"Error: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    /// Validates model name and returns default value if model is not allowed
+    /// </summary>
+    private string ValidateAndGetModel(string? model)
+    {
+        var validatedModel = _settings.ValidateModel(model);
+        
+        // Log warning if model was not allowed and fallback occurred
+        if (!string.IsNullOrWhiteSpace(model) && validatedModel != model)
+        {
+            _logger.LogWarning("Requested model '{Model}' is not in the allowed list. Falling back to default model '{DefaultModel}'",
+                model, _settings.CopilotModel);
+        }
+        
+        return validatedModel;
     }
 }
