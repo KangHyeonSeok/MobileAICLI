@@ -11,17 +11,20 @@ public class SettingsService
     private readonly IOptionsSnapshot<MobileAICLISettings> _settings;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SettingsService> _logger;
+    private readonly AuditLogService _auditLog;
     private readonly string _settingsFilePath;
 
     public SettingsService(
         IOptionsSnapshot<MobileAICLISettings> settings, 
         IConfiguration configuration,
         ILogger<SettingsService> logger,
+        AuditLogService auditLog,
         IWebHostEnvironment env)
     {
         _settings = settings;
         _configuration = configuration;
         _logger = logger;
+        _auditLog = auditLog;
         _settingsFilePath = Path.Combine(env.ContentRootPath, "appsettings.json");
     }
 
@@ -196,6 +199,17 @@ public class SettingsService
             
             _logger.LogInformation("Settings updated successfully");
             
+            // Audit log (mask sensitive data)
+            var changes = new List<string>();
+            if (request.RepositoryPath != null) changes.Add("RepositoryPath");
+            if (request.GitHubCopilotCommand != null) changes.Add("GitHubCopilotCommand");
+            if (request.GitHubCliPath != null) changes.Add("GitHubCliPath");
+            if (request.GitCliPath != null) changes.Add("GitCliPath");
+            if (request.AllowedShellCommands != null) changes.Add($"AllowedShellCommands({request.AllowedShellCommands.Count})");
+            if (request.AllowedWorkRoots != null) changes.Add($"AllowedWorkRoots({request.AllowedWorkRoots.Count})");
+            
+            _auditLog.LogSettingsChange("System", "UpdateSettings", string.Join(", ", changes));
+            
             result.Success = true;
             result.Message = "Settings updated successfully. Restart may be required for changes to take effect.";
             return result;
@@ -239,6 +253,7 @@ public class SettingsService
                 if (!VerifyPassword(request.CurrentPassword, currentSettings.PasswordHash))
                 {
                     _logger.LogWarning("Failed password change attempt");
+                    _auditLog.LogPasswordChange("System", false);
                     result.Success = false;
                     result.Message = "Current password is incorrect";
                     return result;
@@ -300,6 +315,7 @@ public class SettingsService
             await File.WriteAllTextAsync(_settingsFilePath, updatedJson);
             
             _logger.LogInformation("Password changed successfully");
+            _auditLog.LogPasswordChange("System", true);
             
             result.Success = true;
             result.Message = "Password changed successfully";
