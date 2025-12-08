@@ -1,0 +1,648 @@
+@using Microsoft.AspNetCore.SignalR.Client
+@using MobileAICLI.Models
+
+@if (IsVisible)
+{
+    <div class="branch-modal-overlay" @onclick="Close">
+        <div class="branch-modal" @onclick:stopPropagation="true">
+            <div class="branch-modal-header">
+                <div class="current-branch-info">
+                    <span class="bi bi-git"></span>
+                    <span>Current branch</span>
+                    <strong>@CurrentBranch</strong>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" @onclick="FetchOrigin" disabled="@isLoading">
+                    <span class="bi bi-cloud-download"></span>
+                    Fetch origin
+                </button>
+            </div>
+
+            <div class="branch-tabs">
+                <button class="tab @(activeTab == "branches" ? "active" : "")" @onclick='() => activeTab = "branches"'>
+                    Branches
+                </button>
+                <button class="tab disabled" disabled title="Coming soon">
+                    Pull requests
+                </button>
+            </div>
+
+            <div class="branch-filter">
+                <div class="filter-input">
+                    <span class="bi bi-search"></span>
+                    <input type="text" placeholder="Filter branches..." 
+                           @bind="filterText" 
+                           @bind:event="oninput" />
+                </div>
+                <button class="btn btn-sm btn-success" @onclick="ShowCreateBranch">
+                    <span class="bi bi-plus-lg"></span>
+                    New branch
+                </button>
+            </div>
+
+            @if (showCreateInput)
+            {
+                <div class="create-branch-section">
+                    <input type="text" class="form-control" 
+                           placeholder="Branch name"
+                           @bind="newBranchName"
+                           @onkeydown="HandleCreateKeyDown" />
+                    <button class="btn btn-sm btn-primary" @onclick="CreateBranch" disabled="@(string.IsNullOrWhiteSpace(newBranchName))">
+                        Create
+                    </button>
+                    <button class="btn btn-sm btn-outline-secondary" @onclick="CancelCreate">
+                        Cancel
+                    </button>
+                </div>
+            }
+
+            <div class="branch-list">
+                @if (isLoading)
+                {
+                    <div class="loading">
+                        <div class="spinner-border spinner-border-sm"></div>
+                        <span>Loading branches...</span>
+                    </div>
+                }
+                else
+                {
+                    @if (defaultBranches.Any())
+                    {
+                        <div class="branch-section">
+                            <div class="section-header">Default branch</div>
+                            @foreach (var branch in defaultBranches)
+                            {
+                                <div class="branch-item @(branch.IsCurrentBranch ? "current" : "")"
+                                     @onclick="() => CheckoutBranch(branch)">
+                                    <div class="branch-info">
+                                        @if (branch.IsCurrentBranch)
+                                        {
+                                            <span class="bi bi-check text-success"></span>
+                                        }
+                                        else if (branch.IsRemote)
+                                        {
+                                            <span class="bi bi-cloud"></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="bi bi-git"></span>
+                                        }
+                                        <span class="branch-name">@branch.Name</span>
+                                    </div>
+                                    <div class="branch-time">
+                                        @FormatRelativeTime(branch.LastCommitTime)
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (otherBranches.Any())
+                    {
+                        <div class="branch-section">
+                            <div class="section-header">Other branches</div>
+                            @foreach (var branch in otherBranches)
+                            {
+                                <div class="branch-item @(branch.IsCurrentBranch ? "current" : "") @(selectedMergeBranch == branch.Name ? "selected-merge" : "")"
+                                     @onclick="() => SelectOrCheckout(branch)">
+                                    <div class="branch-info">
+                                        @if (branch.IsCurrentBranch)
+                                        {
+                                            <span class="bi bi-check text-success"></span>
+                                        }
+                                        else if (branch.IsRemote)
+                                        {
+                                            <span class="bi bi-cloud"></span>
+                                        }
+                                        else
+                                        {
+                                            <span class="bi bi-git"></span>
+                                        }
+                                        <span class="branch-name">@branch.Name</span>
+                                    </div>
+                                    <div class="branch-time">
+                                        @FormatRelativeTime(branch.LastCommitTime)
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    @if (!defaultBranches.Any() && !otherBranches.Any())
+                    {
+                        <div class="no-branches">
+                            <span class="bi bi-git"></span>
+                            <p>No branches found</p>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="branch-modal-footer">
+                <button class="btn btn-outline-primary merge-btn" 
+                        @onclick="MergeBranch"
+                        disabled="@(string.IsNullOrEmpty(selectedMergeBranch))">
+                    <span class="bi bi-git"></span>
+                    @if (!string.IsNullOrEmpty(selectedMergeBranch))
+                    {
+                        <span>Merge @selectedMergeBranch into @CurrentBranch</span>
+                    }
+                    else
+                    {
+                        <span>Choose a branch to merge into @CurrentBranch</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="error-toast">
+            @errorMessage
+        </div>
+    }
+}
+
+<style>
+    .branch-modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        z-index: 1000;
+        padding-top: 60px;
+    }
+
+    .branch-modal {
+        background: var(--bs-body-bg);
+        border-radius: 8px;
+        width: 100%;
+        max-width: 400px;
+        max-height: calc(100vh - 120px);
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .branch-modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .current-branch-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .branch-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .tab {
+        flex: 1;
+        padding: 10px;
+        border: none;
+        background: none;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+    }
+
+    .tab.active {
+        border-bottom-color: var(--bs-primary);
+        color: var(--bs-primary);
+    }
+
+    .tab.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .branch-filter {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .filter-input {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 4px;
+        background: var(--bs-body-bg);
+    }
+
+    .filter-input input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+    }
+
+    .create-branch-section {
+        display: flex;
+        gap: 8px;
+        padding: 12px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-light);
+    }
+
+    .create-branch-section input {
+        flex: 1;
+    }
+
+    .branch-list {
+        flex: 1;
+        overflow-y: auto;
+        min-height: 200px;
+    }
+
+    .branch-section {
+        padding: 8px 0;
+    }
+
+    .section-header {
+        padding: 4px 16px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--bs-secondary);
+    }
+
+    .branch-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 16px;
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+
+    .branch-item:hover {
+        background: var(--bs-light);
+    }
+
+    .branch-item.current {
+        background: var(--bs-success-bg-subtle);
+    }
+
+    .branch-item.selected-merge {
+        background: var(--bs-primary-bg-subtle);
+        border-left: 3px solid var(--bs-primary);
+    }
+
+    .branch-info {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .branch-name {
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .branch-time {
+        font-size: 0.85rem;
+        color: var(--bs-secondary);
+    }
+
+    .branch-modal-footer {
+        padding: 12px;
+        border-top: 1px solid var(--bs-border-color);
+    }
+
+    .merge-btn {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .loading, .no-branches {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: var(--bs-secondary);
+        gap: 12px;
+    }
+
+    .no-branches .bi {
+        font-size: 2rem;
+    }
+
+    .error-toast {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: var(--bs-danger);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        z-index: 1001;
+        animation: fadeInOut 3s ease;
+    }
+
+    @@keyframes fadeInOut {
+        0%, 100% { opacity: 0; }
+        10%, 90% { opacity: 1; }
+    }
+
+    /* Mobile styles */
+    @@media (max-width: 768px) {
+        .branch-modal-overlay {
+            padding: 0;
+            align-items: flex-end;
+        }
+
+        .branch-modal {
+            max-width: 100%;
+            max-height: 80vh;
+            border-radius: 16px 16px 0 0;
+        }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public bool IsVisible { get; set; }
+
+    [Parameter]
+    public string? CurrentBranch { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnBranchChanged { get; set; }
+
+    [Parameter]
+    public HubConnection? HubConnection { get; set; }
+
+    private List<GitBranchInfo> allBranches = new();
+    private string filterText = "";
+    private string activeTab = "branches";
+    private bool isLoading = false;
+    private bool showCreateInput = false;
+    private string newBranchName = "";
+    private string? selectedMergeBranch;
+    private string? errorMessage;
+
+    private IEnumerable<GitBranchInfo> filteredBranches => 
+        string.IsNullOrWhiteSpace(filterText) 
+            ? allBranches 
+            : allBranches.Where(b => b.Name.Contains(filterText, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<GitBranchInfo> defaultBranches => 
+        filteredBranches.Where(b => b.IsCurrentBranch || b.Name == "main" || b.Name == "master");
+
+    private IEnumerable<GitBranchInfo> otherBranches => 
+        filteredBranches.Except(defaultBranches);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsVisible && allBranches.Count == 0)
+        {
+            await LoadBranches();
+        }
+    }
+
+    private async Task LoadBranches()
+    {
+        if (HubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            allBranches = await HubConnection.InvokeAsync<List<GitBranchInfo>>("GetBranches");
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error loading branches: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CheckoutBranch(GitBranchInfo branch)
+    {
+        if (branch.IsCurrentBranch || HubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CheckoutBranch", branch.Name);
+
+            if (result.Success)
+            {
+                await OnBranchChanged.InvokeAsync(branch.Name);
+            }
+            else
+            {
+                ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void SelectOrCheckout(GitBranchInfo branch)
+    {
+        if (branch.IsCurrentBranch) return;
+
+        // Toggle selection for merge
+        if (selectedMergeBranch == branch.Name)
+        {
+            selectedMergeBranch = null;
+        }
+        else
+        {
+            selectedMergeBranch = branch.Name;
+        }
+    }
+
+    private void ShowCreateBranch()
+    {
+        showCreateInput = true;
+        newBranchName = "";
+    }
+
+    private void CancelCreate()
+    {
+        showCreateInput = false;
+        newBranchName = "";
+    }
+
+    private async Task HandleCreateKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(newBranchName))
+        {
+            await CreateBranch();
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelCreate();
+        }
+    }
+
+    private async Task CreateBranch()
+    {
+        if (HubConnection is null || string.IsNullOrWhiteSpace(newBranchName)) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CreateBranch", newBranchName);
+
+            if (result.Success)
+            {
+                showCreateInput = false;
+                newBranchName = "";
+                await OnBranchChanged.InvokeAsync(newBranchName);
+            }
+            else
+            {
+                ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task MergeBranch()
+    {
+        if (HubConnection is null || string.IsNullOrEmpty(selectedMergeBranch)) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("MergeBranch", selectedMergeBranch);
+
+            if (result.Success)
+            {
+                selectedMergeBranch = null;
+                await LoadBranches();
+            }
+            else
+            {
+                ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task FetchOrigin()
+    {
+        if (HubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            StateHasChanged();
+
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("Fetch");
+
+            if (result.Success)
+            {
+                await LoadBranches();
+            }
+            else
+            {
+                ShowError(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void Close()
+    {
+        selectedMergeBranch = null;
+        showCreateInput = false;
+        filterText = "";
+        OnClose.InvokeAsync();
+    }
+
+    private void ShowError(string message)
+    {
+        errorMessage = message;
+        StateHasChanged();
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            errorMessage = null;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private static string FormatRelativeTime(DateTime? dateTime)
+    {
+        if (dateTime == null) return "";
+
+        var diff = DateTime.Now - dateTime.Value;
+
+        if (diff.TotalMinutes < 1) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} min ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hours ago";
+        if (diff.TotalDays < 30) return $"{(int)diff.TotalDays} days ago";
+        if (diff.TotalDays < 365) return $"{(int)(diff.TotalDays / 30)} months ago";
+        
+        return $"{(int)(diff.TotalDays / 365)} years ago";
+    }
+}

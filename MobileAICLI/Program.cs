@@ -66,6 +66,7 @@ builder.Services.AddScoped<LocalStorageService>();
 builder.Services.AddScoped<SettingsService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ToolDiscoveryService>();
+builder.Services.AddScoped<GitService>();
 
 var app = builder.Build();
 
@@ -97,12 +98,14 @@ if (settings.EnableAuthentication)
     app.MapHub<ShellHub>("/shellhub").RequireAuthorization();
     app.MapHub<CopilotHub>("/copilothub").RequireAuthorization();
     app.MapHub<TestHub>("/testhub").RequireAuthorization();
+    app.MapHub<GitHub>("/github").RequireAuthorization();
 }
 else
 {
     app.MapHub<ShellHub>("/shellhub");
     app.MapHub<CopilotHub>("/copilothub");
     app.MapHub<TestHub>("/testhub");
+    app.MapHub<GitHub>("/github");
 }
 
 // Map SignalR Hub for settings management

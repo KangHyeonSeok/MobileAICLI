@@ -1,0 +1,1002 @@
+@page "/git"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.AspNetCore.Http
+@using MobileAICLI.Services
+@using MobileAICLI.Models
+@inject NavigationManager NavigationManager
+@inject IHttpContextAccessor HttpContextAccessor
+@implements IAsyncDisposable
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Git</PageTitle>
+
+<div class="git-container">
+    @* Top Bar *@
+    <div class="git-top-bar">
+        <div class="git-branch-section">
+            <button class="btn btn-sm btn-outline-secondary branch-btn" @onclick="OpenBranchModal" disabled="@(!isConnected)">
+                <span class="bi bi-git"></span>
+                <span class="branch-name">@(currentBranch ?? "No branch")</span>
+                <span class="bi bi-chevron-down"></span>
+            </button>
+            @if (status != null && (status.AheadBy > 0 || status.BehindBy > 0))
+            {
+                <span class="sync-status">
+                    @if (status.AheadBy > 0)
+                    {
+                        <span class="ahead">↑@status.AheadBy</span>
+                    }
+                    @if (status.BehindBy > 0)
+                    {
+                        <span class="behind">↓@status.BehindBy</span>
+                    }
+                </span>
+            }
+        </div>
+        <div class="git-actions">
+            <button class="btn btn-sm btn-outline-primary" @onclick="Fetch" disabled="@(!isConnected || isLoading)" title="Fetch">
+                <span class="bi bi-cloud-download"></span>
+                <span class="btn-text">Fetch</span>
+            </button>
+            <button class="btn btn-sm btn-primary" @onclick="Push" disabled="@(!isConnected || isLoading)" title="Push">
+                <span class="bi bi-cloud-upload"></span>
+                <span class="btn-text">Push</span>
+            </button>
+        </div>
+    </div>
+
+    @* Main Content *@
+    <div class="git-main">
+        @* Left Panel - Changed Files *@
+        <div class="git-files-panel @(selectedFile != null ? "collapsed" : "")">
+            <div class="panel-header">
+                <span>Changes</span>
+                <span class="badge bg-secondary">@changedFiles.Count</span>
+            </div>
+            <div class="files-list">
+                @if (changedFiles.Count == 0)
+                {
+                    <div class="no-changes">
+                        <span class="bi bi-check-circle text-success"></span>
+                        <p>No changes</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var file in changedFiles)
+                    {
+                        <div class="file-item @(selectedFile?.FilePath == file.FilePath ? "selected" : "")"
+                             @onclick="() => SelectFile(file)"
+                             @ontouchstart="(e) => TouchStart(e, file)"
+                             @ontouchmove="TouchMove"
+                             @ontouchend="(e) => TouchEnd(e, file)">
+                            <div class="file-content" style="transform: translateX(@(GetSwipeOffset(file))px)">
+                                <div class="file-checkbox">
+                                    <input type="checkbox" checked="@file.IsStaged" 
+                                           @onclick:stopPropagation="true"
+                                           @onchange="() => ToggleStage(file)" />
+                                </div>
+                                <div class="file-info">
+                                    <span class="file-icon @GetChangeTypeClass(file.ChangeType)">
+                                        @GetChangeTypeIcon(file.ChangeType)
+                                    </span>
+                                    <span class="file-name" title="@file.FilePath">@file.FileName</span>
+                                </div>
+                                <div class="file-stats">
+                                    @if (file.AddedLines > 0)
+                                    {
+                                        <span class="added">+@file.AddedLines</span>
+                                    }
+                                    @if (file.DeletedLines > 0)
+                                    {
+                                        <span class="deleted">-@file.DeletedLines</span>
+                                    }
+                                </div>
+                            </div>
+                            <div class="file-actions">
+                                <button class="btn btn-sm btn-danger" @onclick="() => DiscardFile(file)" @onclick:stopPropagation="true">
+                                    <span class="bi bi-trash"></span> Discard
+                                </button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        @* Right Panel - Diff Viewer *@
+        <div class="git-diff-panel @(selectedFile == null ? "hidden" : "")">
+            @if (selectedFile != null)
+            {
+                <div class="panel-header">
+                    <button class="btn btn-sm btn-link back-btn" @onclick="ClearSelection">
+                        <span class="bi bi-arrow-left"></span>
+                    </button>
+                    <span class="diff-file-path">@selectedFile.FilePath</span>
+                </div>
+                <div class="diff-content">
+                    @if (isLoadingDiff)
+                    {
+                        <div class="loading">
+                            <div class="spinner-border spinner-border-sm"></div>
+                            <span>Loading diff...</span>
+                        </div>
+                    }
+                    else if (currentDiff != null)
+                    {
+                        <pre class="diff-view">@foreach (var hunk in currentDiff.Hunks)
+                        {
+                            <div class="diff-hunk">
+                                <div class="hunk-header">@@ -@hunk.OldStart,@hunk.OldLines +@hunk.NewStart,@hunk.NewLines @@ @hunk.Header</div>
+                                @foreach (var line in hunk.Lines)
+                                {
+                                    <div class="diff-line @GetDiffLineClass(line.Type)">
+                                        <span class="line-num old">@(line.OldLineNumber?.ToString() ?? " ")</span>
+                                        <span class="line-num new">@(line.NewLineNumber?.ToString() ?? " ")</span>
+                                        <span class="line-prefix">@GetDiffLinePrefix(line.Type)</span>
+                                        <span class="line-content">@line.Content</span>
+                                    </div>
+                                }
+                            </div>
+                        }</pre>
+                    }
+                    else
+                    {
+                        <div class="no-diff">
+                            <span class="bi bi-file-earmark-diff"></span>
+                            <p>No diff available</p>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Bottom Panel - Commit *@
+    <div class="git-commit-panel">
+        <div class="commit-inputs">
+            <input type="text" class="form-control commit-summary" 
+                   placeholder="Summary (required)" 
+                   @bind="commitMessage"
+                   @bind:event="oninput"
+                   disabled="@(!isConnected || isLoading)" />
+            <textarea class="form-control commit-description" 
+                      placeholder="Description"
+                      @bind="commitDescription"
+                      disabled="@(!isConnected || isLoading)"></textarea>
+        </div>
+        <button class="btn btn-success commit-btn" 
+                @onclick="Commit" 
+                disabled="@(!CanCommit())">
+            <span class="bi bi-check-lg"></span>
+            <span>Commit @GetStagedCount() files to @currentBranch</span>
+        </button>
+    </div>
+
+    @* Status Messages *@
+    @if (!string.IsNullOrEmpty(statusMessage))
+    {
+        <div class="status-toast @(isError ? "error" : "success")">
+            @statusMessage
+        </div>
+    }
+
+    @* Loading Overlay *@
+    @if (isLoading)
+    {
+        <div class="loading-overlay">
+            <div class="spinner-border"></div>
+            <span>@loadingMessage</span>
+        </div>
+    }
+</div>
+
+@* Branch Modal *@
+<GitBranchModal IsVisible="@showBranchModal"
+                CurrentBranch="@currentBranch"
+                OnClose="CloseBranchModal"
+                OnBranchChanged="OnBranchChanged"
+                HubConnection="@hubConnection" />
+
+<style>
+    .git-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+        background: var(--bs-body-bg);
+    }
+
+    .git-top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 12px 8px 60px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-light);
+        flex-shrink: 0;
+    }
+
+    .git-branch-section {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .branch-btn {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .branch-name {
+        font-weight: 500;
+        max-width: 150px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .sync-status {
+        display: flex;
+        gap: 4px;
+        font-size: 0.85rem;
+    }
+
+    .sync-status .ahead { color: var(--bs-success); }
+    .sync-status .behind { color: var(--bs-warning); }
+
+    .git-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .git-main {
+        display: flex;
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .git-files-panel {
+        width: 300px;
+        border-right: 1px solid var(--bs-border-color);
+        display: flex;
+        flex-direction: column;
+        flex-shrink: 0;
+    }
+
+    .git-diff-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .git-diff-panel.hidden {
+        display: none;
+    }
+
+    .panel-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--bs-border-color);
+        background: var(--bs-light);
+        font-weight: 500;
+    }
+
+    .files-list {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .file-item {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .file-content {
+        display: flex;
+        align-items: center;
+        padding: 8px 12px;
+        gap: 8px;
+        cursor: pointer;
+        transition: transform 0.2s ease, background 0.15s;
+        background: var(--bs-body-bg);
+    }
+
+    .file-content:hover {
+        background: var(--bs-light);
+    }
+
+    .file-item.selected .file-content {
+        background: var(--bs-primary-bg-subtle);
+    }
+
+    .file-checkbox input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+
+    .file-info {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .file-icon {
+        font-size: 0.85rem;
+    }
+
+    .file-icon.added { color: var(--bs-success); }
+    .file-icon.modified { color: var(--bs-warning); }
+    .file-icon.deleted { color: var(--bs-danger); }
+    .file-icon.untracked { color: var(--bs-secondary); }
+
+    .file-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .file-stats {
+        font-size: 0.8rem;
+        display: flex;
+        gap: 4px;
+    }
+
+    .file-stats .added { color: var(--bs-success); }
+    .file-stats .deleted { color: var(--bs-danger); }
+
+    .file-actions {
+        position: absolute;
+        right: 0;
+        top: 0;
+        bottom: 0;
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        background: var(--bs-danger);
+        transform: translateX(100%);
+        transition: transform 0.2s ease;
+    }
+
+    .file-item.swiped .file-actions {
+        transform: translateX(0);
+    }
+
+    .no-changes {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: var(--bs-secondary);
+    }
+
+    .no-changes .bi {
+        font-size: 2rem;
+        margin-bottom: 8px;
+    }
+
+    .diff-content {
+        flex: 1;
+        overflow: auto;
+        padding: 0;
+    }
+
+    .diff-view {
+        margin: 0;
+        font-family: 'Consolas', 'Monaco', monospace;
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+
+    .diff-hunk {
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .hunk-header {
+        background: var(--bs-info-bg-subtle);
+        color: var(--bs-info);
+        padding: 4px 12px;
+        font-style: italic;
+    }
+
+    .diff-line {
+        display: flex;
+        padding: 0 8px;
+    }
+
+    .diff-line.added {
+        background: rgba(40, 167, 69, 0.15);
+    }
+
+    .diff-line.deleted {
+        background: rgba(220, 53, 69, 0.15);
+    }
+
+    .line-num {
+        width: 40px;
+        text-align: right;
+        padding-right: 8px;
+        color: var(--bs-secondary);
+        user-select: none;
+    }
+
+    .line-prefix {
+        width: 16px;
+        text-align: center;
+        user-select: none;
+    }
+
+    .diff-line.added .line-prefix { color: var(--bs-success); }
+    .diff-line.deleted .line-prefix { color: var(--bs-danger); }
+
+    .line-content {
+        flex: 1;
+        white-space: pre;
+    }
+
+    .back-btn {
+        padding: 2px 6px;
+    }
+
+    .diff-file-path {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .git-commit-panel {
+        border-top: 1px solid var(--bs-border-color);
+        padding: 12px;
+        background: var(--bs-light);
+        flex-shrink: 0;
+    }
+
+    .commit-inputs {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .commit-summary {
+        font-weight: 500;
+    }
+
+    .commit-description {
+        min-height: 60px;
+        resize: none;
+    }
+
+    .commit-btn {
+        width: 100%;
+    }
+
+    .status-toast {
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 8px 16px;
+        border-radius: 4px;
+        color: white;
+        z-index: 1000;
+        animation: fadeInOut 3s ease;
+    }
+
+    .status-toast.success { background: var(--bs-success); }
+    .status-toast.error { background: var(--bs-danger); }
+
+    @@keyframes fadeInOut {
+        0%, 100% { opacity: 0; }
+        10%, 90% { opacity: 1; }
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        z-index: 1001;
+        color: white;
+    }
+
+    .loading, .no-diff {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        color: var(--bs-secondary);
+        gap: 12px;
+    }
+
+    .no-diff .bi {
+        font-size: 2rem;
+    }
+
+    /* Mobile styles */
+    @@media (max-width: 768px) {
+        .git-top-bar {
+            padding-left: 50px;
+        }
+
+        .btn-text {
+            display: none;
+        }
+
+        .git-files-panel {
+            width: 100%;
+        }
+
+        .git-files-panel.collapsed {
+            display: none;
+        }
+
+        .git-diff-panel.hidden {
+            display: none;
+        }
+    }
+</style>
+
+@code {
+    private HubConnection? hubConnection;
+    private bool isConnected = false;
+    private bool isLoading = false;
+    private bool isLoadingDiff = false;
+    private bool isError = false;
+    private string? loadingMessage;
+    private string? statusMessage;
+    private string? currentBranch;
+    private GitRepositoryStatus? status;
+    private List<GitFileChange> changedFiles = new();
+    private GitFileChange? selectedFile;
+    private GitDiffResult? currentDiff;
+    private string commitMessage = "";
+    private string commitDescription = "";
+    private bool showBranchModal = false;
+
+    // Touch/Swipe state
+    private Dictionary<string, double> swipeOffsets = new();
+    private double touchStartX;
+    private string? swipingFile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await InitializeHubConnection();
+    }
+
+    private async Task InitializeHubConnection()
+    {
+        var cookieHeader = HttpContextAccessor.HttpContext?.Request?.Headers?["Cookie"].ToString();
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/github"), options =>
+            {
+                if (!string.IsNullOrEmpty(cookieHeader))
+                {
+                    options.Headers.Add("Cookie", cookieHeader);
+                }
+            })
+            .WithAutomaticReconnect()
+            .Build();
+
+        // Event handlers
+        hubConnection.On<string>("FileStaged", async (filePath) => await RefreshChanges());
+        hubConnection.On<string>("FileUnstaged", async (filePath) => await RefreshChanges());
+        hubConnection.On<string>("FileDiscarded", async (filePath) => await RefreshChanges());
+        hubConnection.On<string>("CommitCreated", async (message) => await RefreshChanges());
+        hubConnection.On<string>("BranchChanged", async (branchName) =>
+        {
+            currentBranch = branchName;
+            await RefreshChanges();
+        });
+
+        hubConnection.Reconnecting += error =>
+        {
+            isConnected = false;
+            InvokeAsync(StateHasChanged);
+            return Task.CompletedTask;
+        };
+
+        hubConnection.Reconnected += connectionId =>
+        {
+            isConnected = true;
+            InvokeAsync(RefreshChanges);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            await hubConnection.StartAsync();
+            isConnected = true;
+            await RefreshChanges();
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Failed to connect: {ex.Message}", true);
+        }
+    }
+
+    private async Task RefreshChanges()
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            status = await hubConnection.InvokeAsync<GitRepositoryStatus>("GetStatus");
+            currentBranch = status?.CurrentBranch;
+            changedFiles = await hubConnection.InvokeAsync<List<GitFileChange>>("GetChangedFiles");
+            
+            // Clear selection if file no longer exists
+            if (selectedFile != null && !changedFiles.Any(f => f.FilePath == selectedFile.FilePath))
+            {
+                selectedFile = null;
+                currentDiff = null;
+            }
+            
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error refreshing: {ex.Message}", true);
+        }
+    }
+
+    private async Task SelectFile(GitFileChange file)
+    {
+        if (swipingFile != null) return; // Don't select while swiping
+        
+        selectedFile = file;
+        isLoadingDiff = true;
+        StateHasChanged();
+
+        try
+        {
+            if (hubConnection is not null)
+            {
+                currentDiff = await hubConnection.InvokeAsync<GitDiffResult>("GetFileDiff", file.FilePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error loading diff: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoadingDiff = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ClearSelection()
+    {
+        selectedFile = null;
+        currentDiff = null;
+    }
+
+    private async Task ToggleStage(GitFileChange file)
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            if (file.IsStaged)
+            {
+                await hubConnection.InvokeAsync<(bool, string)>("UnstageFile", file.FilePath);
+            }
+            else
+            {
+                await hubConnection.InvokeAsync<(bool, string)>("StageFile", file.FilePath);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+    }
+
+    private async Task DiscardFile(GitFileChange file)
+    {
+        if (hubConnection is null) return;
+
+        // Reset swipe state
+        swipeOffsets.Remove(file.FilePath);
+        swipingFile = null;
+
+        try
+        {
+            isLoading = true;
+            loadingMessage = "Discarding changes...";
+            StateHasChanged();
+
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("DiscardFileChanges", file.FilePath);
+            
+            if (result.Success)
+            {
+                ShowMessage(result.Message, false);
+            }
+            else
+            {
+                ShowMessage(result.Message, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = null;
+        }
+    }
+
+    private async Task Commit()
+    {
+        if (hubConnection is null || string.IsNullOrWhiteSpace(commitMessage)) return;
+
+        try
+        {
+            isLoading = true;
+            loadingMessage = "Creating commit...";
+            StateHasChanged();
+
+            var request = new GitCommitRequest
+            {
+                Message = commitMessage,
+                Description = string.IsNullOrWhiteSpace(commitDescription) ? null : commitDescription
+            };
+
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Commit", request);
+
+            if (result.Success)
+            {
+                commitMessage = "";
+                commitDescription = "";
+                ShowMessage(result.Message, false);
+            }
+            else
+            {
+                ShowMessage(result.Message, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = null;
+        }
+    }
+
+    private async Task Push()
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            loadingMessage = "Pushing changes...";
+            StateHasChanged();
+
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Push");
+
+            if (result.Success)
+            {
+                ShowMessage(result.Message, false);
+                await RefreshChanges();
+            }
+            else
+            {
+                ShowMessage(result.Message, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = null;
+        }
+    }
+
+    private async Task Fetch()
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            loadingMessage = "Fetching changes...";
+            StateHasChanged();
+
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Fetch");
+
+            if (result.Success)
+            {
+                ShowMessage(result.Message, false);
+                await RefreshChanges();
+            }
+            else
+            {
+                ShowMessage(result.Message, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = null;
+        }
+    }
+
+    // Swipe gesture handlers
+    private void TouchStart(TouchEventArgs e, GitFileChange file)
+    {
+        if (e.Touches.Length > 0)
+        {
+            touchStartX = e.Touches[0].ClientX;
+            swipingFile = file.FilePath;
+        }
+    }
+
+    private void TouchMove(TouchEventArgs e)
+    {
+        if (swipingFile == null || e.Touches.Length == 0) return;
+
+        var currentX = e.Touches[0].ClientX;
+        var deltaX = currentX - touchStartX;
+
+        // Only allow right swipe for discard
+        if (deltaX < 0)
+        {
+            swipeOffsets[swipingFile] = Math.Max(deltaX, -80);
+            StateHasChanged();
+        }
+    }
+
+    private void TouchEnd(TouchEventArgs e, GitFileChange file)
+    {
+        if (swipingFile == null) return;
+
+        if (swipeOffsets.TryGetValue(file.FilePath, out var offset) && offset < -40)
+        {
+            // Keep showing discard button
+            swipeOffsets[file.FilePath] = -80;
+        }
+        else
+        {
+            // Reset
+            swipeOffsets.Remove(file.FilePath);
+        }
+
+        swipingFile = null;
+        StateHasChanged();
+    }
+
+    private double GetSwipeOffset(GitFileChange file)
+    {
+        return swipeOffsets.TryGetValue(file.FilePath, out var offset) ? offset : 0;
+    }
+
+    private void OpenBranchModal()
+    {
+        showBranchModal = true;
+    }
+
+    private void CloseBranchModal()
+    {
+        showBranchModal = false;
+    }
+
+    private async Task OnBranchChanged(string branchName)
+    {
+        currentBranch = branchName;
+        showBranchModal = false;
+        await RefreshChanges();
+    }
+
+    private bool CanCommit()
+    {
+        return isConnected && 
+               !isLoading && 
+               !string.IsNullOrWhiteSpace(commitMessage) && 
+               changedFiles.Any(f => f.IsStaged);
+    }
+
+    private int GetStagedCount()
+    {
+        return changedFiles.Count(f => f.IsStaged);
+    }
+
+    private void ShowMessage(string message, bool error)
+    {
+        statusMessage = message;
+        isError = error;
+        StateHasChanged();
+
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000);
+            statusMessage = null;
+            await InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private static string GetChangeTypeClass(GitChangeType type)
+    {
+        return type switch
+        {
+            GitChangeType.Added => "added",
+            GitChangeType.Modified => "modified",
+            GitChangeType.Deleted => "deleted",
+            GitChangeType.Untracked => "untracked",
+            _ => "modified"
+        };
+    }
+
+    private static string GetChangeTypeIcon(GitChangeType type)
+    {
+        return type switch
+        {
+            GitChangeType.Added => "A",
+            GitChangeType.Modified => "M",
+            GitChangeType.Deleted => "D",
+            GitChangeType.Renamed => "R",
+            GitChangeType.Untracked => "?",
+            _ => "M"
+        };
+    }
+
+    private static string GetDiffLineClass(DiffLineType type)
+    {
+        return type switch
+        {
+            DiffLineType.Added => "added",
+            DiffLineType.Deleted => "deleted",
+            _ => "context"
+        };
+    }
+
+    private static string GetDiffLinePrefix(DiffLineType type)
+    {
+        return type switch
+        {
+            DiffLineType.Added => "+",
+            DiffLineType.Deleted => "-",
+            _ => " "
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
