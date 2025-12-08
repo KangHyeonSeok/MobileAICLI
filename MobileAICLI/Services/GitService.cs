@@ -424,7 +424,7 @@ public class GitService
             else
             {
                 // Untracked file: just delete it
-                var workDir = workingDirectory ?? _context.GetAbsolutePath();
+                var workDir = ValidateAndGetWorkingDirectory(workingDirectory);
                 var fullPath = Path.Combine(workDir, filePath);
                 if (File.Exists(fullPath))
                 {
