@@ -28,12 +28,22 @@ public async Task<List<GitFileChange>> GetChangedFilesAsync(string? workingDirec
 ```csharp
 private string ValidateAndGetWorkingDirectory(string? workingDirectory)
 {
+    var repoRoot = _context.GetAbsolutePath();
     if (string.IsNullOrWhiteSpace(workingDirectory))
-        return _context.GetAbsolutePath();
+        return repoRoot;
     
     var normalizedPath = Path.GetFullPath(workingDirectory);
     if (!Directory.Exists(normalizedPath))
-        return _context.GetAbsolutePath();
+        return repoRoot;
+    
+    // Ensure normalizedPath is under repoRoot
+    var relPath = Path.GetRelativePath(repoRoot, normalizedPath);
+    if (relPath.StartsWith("..") || Path.IsPathRooted(relPath))
+    {
+        // Optionally log the attempt to escape the repo root
+        //_logger.LogWarning($"Attempted path escape: {normalizedPath}");
+        return repoRoot;
+    }
     
     return normalizedPath;
 }
