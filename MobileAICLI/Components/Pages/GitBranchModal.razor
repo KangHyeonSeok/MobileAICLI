@@ -398,6 +398,9 @@
     [Parameter]
     public HubConnection? HubConnection { get; set; }
 
+    [Parameter]
+    public string? WorkingDirectory { get; set; }
+
     private List<GitBranchInfo> allBranches = new();
     private string filterText = "";
     private string activeTab = "branches";
@@ -435,7 +438,7 @@
             isLoading = true;
             StateHasChanged();
 
-            allBranches = await HubConnection.InvokeAsync<List<GitBranchInfo>>("GetBranches");
+            allBranches = await HubConnection.InvokeAsync<List<GitBranchInfo>>("GetBranches", WorkingDirectory);
         }
         catch (Exception ex)
         {
@@ -457,7 +460,7 @@
             isLoading = true;
             StateHasChanged();
 
-            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CheckoutBranch", branch.Name);
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CheckoutBranch", branch.Name, WorkingDirectory);
 
             if (result.Success)
             {
@@ -526,7 +529,7 @@
             isLoading = true;
             StateHasChanged();
 
-            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CreateBranch", newBranchName);
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("CreateBranch", newBranchName, WorkingDirectory);
 
             if (result.Success)
             {
@@ -558,7 +561,7 @@
             isLoading = true;
             StateHasChanged();
 
-            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("MergeBranch", selectedMergeBranch);
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("MergeBranch", selectedMergeBranch, WorkingDirectory);
 
             if (result.Success)
             {
@@ -589,7 +592,7 @@
             isLoading = true;
             StateHasChanged();
 
-            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("Fetch");
+            var result = await HubConnection.InvokeAsync<(bool Success, string Message)>("Fetch", WorkingDirectory);
 
             if (result.Success)
             {

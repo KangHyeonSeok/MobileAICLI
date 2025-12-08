@@ -228,7 +228,8 @@
                 CurrentBranch="@currentBranch"
                 OnClose="CloseBranchModal"
                 OnBranchChanged="OnBranchChanged"
-                HubConnection="@hubConnection" />
+                HubConnection="@hubConnection"
+                WorkingDirectory="@currentRepoPath" />
 
 @* Folder Browser *@
 <FolderBrowser IsVisible="showFolderBrowser"
@@ -692,9 +693,9 @@
 
         try
         {
-            status = await hubConnection.InvokeAsync<GitRepositoryStatus>("GetStatus");
+            status = await hubConnection.InvokeAsync<GitRepositoryStatus>("GetStatus", currentRepoPath);
             currentBranch = status?.CurrentBranch;
-            changedFiles = await hubConnection.InvokeAsync<List<GitFileChange>>("GetChangedFiles");
+            changedFiles = await hubConnection.InvokeAsync<List<GitFileChange>>("GetChangedFiles", currentRepoPath);
             
             // Clear selection if file no longer exists
             if (selectedFile != null && !changedFiles.Any(f => f.FilePath == selectedFile.FilePath))
@@ -723,7 +724,7 @@
         {
             if (hubConnection is not null)
             {
-                currentDiff = await hubConnection.InvokeAsync<GitDiffResult>("GetFileDiff", file.FilePath);
+                currentDiff = await hubConnection.InvokeAsync<GitDiffResult>("GetFileDiff", file.FilePath, currentRepoPath);
             }
         }
         catch (Exception ex)
@@ -751,11 +752,11 @@
         {
             if (file.IsStaged)
             {
-                await hubConnection.InvokeAsync<(bool, string)>("UnstageFile", file.FilePath);
+                await hubConnection.InvokeAsync<(bool, string)>("UnstageFile", file.FilePath, currentRepoPath);
             }
             else
             {
-                await hubConnection.InvokeAsync<(bool, string)>("StageFile", file.FilePath);
+                await hubConnection.InvokeAsync<(bool, string)>("StageFile", file.FilePath, currentRepoPath);
             }
         }
         catch (Exception ex)
@@ -778,7 +779,7 @@
             loadingMessage = "Discarding changes...";
             StateHasChanged();
 
-            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("DiscardFileChanges", file.FilePath);
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("DiscardFileChanges", file.FilePath, currentRepoPath);
             
             if (result.Success)
             {
@@ -816,7 +817,7 @@
                 Description = string.IsNullOrWhiteSpace(commitDescription) ? null : commitDescription
             };
 
-            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Commit", request);
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Commit", request, currentRepoPath);
 
             if (result.Success)
             {
@@ -850,7 +851,7 @@
             loadingMessage = "Pushing changes...";
             StateHasChanged();
 
-            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Push");
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Push", currentRepoPath);
 
             if (result.Success)
             {
@@ -883,7 +884,7 @@
             loadingMessage = "Fetching changes...";
             StateHasChanged();
 
-            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Fetch");
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Fetch", currentRepoPath);
 
             if (result.Success)
             {
