@@ -85,4 +85,4 @@ changedFiles = await hubConnection.InvokeAsync<List<GitFileChange>>("GetChangedF
 - 수동 테스트 필요: 실제 Git 저장소 경로 변경 시나리오
 
 ## 참고
-이 패턴은 `CopilotService`에서 이미 사용 중인 방식으로, `CopilotSettings.WorkingDirectory`를 통해 작업 경로를 전달합니다.
+이 패턴은 기존 `CopilotService`와는 다르게, 각 메서드에 `workingDirectory` 파라미터를 명시적으로 전달하는 방식입니다. `CopilotService`는 메서드 파라미터로 경로를 받지 않고, 내부적으로 `_context.GetAbsolutePath()`를 사용합니다.
