@@ -61,7 +61,7 @@ public class GitService
         try
         {
             // Check if gh is installed and authenticated
-            var (ghSuccess, ghOutput, ghError) = await ExecuteCommandAsync("gh", workingDirectory, "auth", "status");
+            var (ghSuccess, _, ghError) = await ExecuteCommandAsync("gh", workingDirectory, "auth", "status");
             
             if (!ghSuccess)
             {
