@@ -24,12 +24,12 @@ public class GitService
     /// <summary>
     /// Checks if Git and GitHub CLI are properly authenticated
     /// </summary>
-    public async Task<(bool IsAuthenticated, string Message)> CheckAuthenticationAsync()
+    public async Task<(bool IsAuthenticated, string Message)> CheckAuthenticationAsync(string? workingDirectory = null)
     {
         try
         {
             // Check if gh is installed and authenticated
-            var (ghSuccess, ghOutput, ghError) = await ExecuteCommandAsync("gh", "auth", "status");
+            var (ghSuccess, ghOutput, ghError) = await ExecuteCommandAsync("gh", workingDirectory, "auth", "status");
             
             if (!ghSuccess)
             {
@@ -41,7 +41,7 @@ public class GitService
             }
             
             // Check if git credential helper is configured for gh
-            var (gitSuccess, gitHelper, _) = await ExecuteGitCommandAsync("config", "--get", "credential.helper");
+            var (gitSuccess, gitHelper, _) = await ExecuteGitCommandAsync(workingDirectory, "config", "--get", "credential.helper");
             
             if (!gitHelper.Contains("gh"))
             {
@@ -64,14 +64,14 @@ public class GitService
     /// <summary>
     /// Gets the current repository status
     /// </summary>
-    public async Task<GitRepositoryStatus> GetRepositoryStatusAsync()
+    public async Task<GitRepositoryStatus> GetRepositoryStatusAsync(string? workingDirectory = null)
     {
         var status = new GitRepositoryStatus();
         
         try
         {
             // Check if it's a git repository
-            var (isRepo, _, _) = await ExecuteGitCommandAsync("rev-parse", "--is-inside-work-tree");
+            var (isRepo, _, _) = await ExecuteGitCommandAsync(workingDirectory, "rev-parse", "--is-inside-work-tree");
             status.IsRepository = isRepo;
             
             if (!isRepo)
@@ -81,18 +81,18 @@ public class GitService
             }
             
             // Get current branch
-            var (branchSuccess, branchOutput, _) = await ExecuteGitCommandAsync("branch", "--show-current");
+            var (branchSuccess, branchOutput, _) = await ExecuteGitCommandAsync(workingDirectory, "branch", "--show-current");
             if (branchSuccess)
             {
                 status.CurrentBranch = branchOutput.Trim();
             }
             
             // Check for uncommitted changes
-            var (statusSuccess, statusOutput, _) = await ExecuteGitCommandAsync("status", "--porcelain");
+            var (statusSuccess, statusOutput, _) = await ExecuteGitCommandAsync(workingDirectory, "status", "--porcelain");
             status.HasUncommittedChanges = statusSuccess && !string.IsNullOrWhiteSpace(statusOutput);
             
             // Get ahead/behind status
-            var (revSuccess, revOutput, _) = await ExecuteGitCommandAsync("rev-list", "--count", "--left-right", "@{upstream}...HEAD");
+            var (revSuccess, revOutput, _) = await ExecuteGitCommandAsync(workingDirectory, "rev-list", "--count", "--left-right", "@{upstream}...HEAD");
             if (revSuccess && !string.IsNullOrWhiteSpace(revOutput))
             {
                 var parts = revOutput.Trim().Split('\t');
@@ -106,7 +106,7 @@ public class GitService
             }
             
             // Get remote URL
-            var (remoteSuccess, remoteOutput, _) = await ExecuteGitCommandAsync("config", "--get", "remote.origin.url");
+            var (remoteSuccess, remoteOutput, _) = await ExecuteGitCommandAsync(workingDirectory, "config", "--get", "remote.origin.url");
             if (remoteSuccess)
             {
                 status.RemoteUrl = remoteOutput.Trim();
@@ -133,14 +133,14 @@ public class GitService
     /// <summary>
     /// Gets the list of changed files in the repository
     /// </summary>
-    public async Task<List<GitFileChange>> GetChangedFilesAsync()
+    public async Task<List<GitFileChange>> GetChangedFilesAsync(string? workingDirectory = null)
     {
         var changes = new List<GitFileChange>();
         
         try
         {
             // Get staged and unstaged changes
-            var (success, output, _) = await ExecuteGitCommandAsync("status", "--porcelain", "-uall");
+            var (success, output, _) = await ExecuteGitCommandAsync(workingDirectory, "status", "--porcelain", "-uall");
             
             if (!success || string.IsNullOrWhiteSpace(output))
             {
@@ -174,7 +174,7 @@ public class GitService
                 // Get line counts for modified files
                 if (change.ChangeType != GitChangeType.Untracked)
                 {
-                    var (diffSuccess, diffOutput, _) = await ExecuteGitCommandAsync("diff", "--numstat", "--", filePath);
+                    var (diffSuccess, diffOutput, _) = await ExecuteGitCommandAsync(workingDirectory, "diff", "--numstat", "--", filePath);
                     if (diffSuccess && !string.IsNullOrWhiteSpace(diffOutput))
                     {
                         var parts = diffOutput.Trim().Split('\t');
@@ -223,19 +223,19 @@ public class GitService
     /// <summary>
     /// Gets the diff for a specific file
     /// </summary>
-    public async Task<GitDiffResult> GetFileDiffAsync(string filePath)
+    public async Task<GitDiffResult> GetFileDiffAsync(string filePath, string? workingDirectory = null)
     {
         var result = new GitDiffResult { FilePath = filePath };
         
         try
         {
             // Get diff (both staged and unstaged)
-            var (success, output, _) = await ExecuteGitCommandAsync("diff", "HEAD", "--", filePath);
+            var (success, output, _) = await ExecuteGitCommandAsync(workingDirectory, "diff", "HEAD", "--", filePath);
             
             if (!success)
             {
                 // Try diff against empty (for new files)
-                (success, output, _) = await ExecuteGitCommandAsync("diff", "--no-index", "/dev/null", filePath);
+                (success, output, _) = await ExecuteGitCommandAsync(workingDirectory, "diff", "--no-index", "/dev/null", filePath);
             }
             
             if (success && !string.IsNullOrWhiteSpace(output))
@@ -321,11 +321,11 @@ public class GitService
     /// <summary>
     /// Stages a file for commit
     /// </summary>
-    public async Task<(bool Success, string Message)> StageFileAsync(string filePath)
+    public async Task<(bool Success, string Message)> StageFileAsync(string filePath, string? workingDirectory = null)
     {
         try
         {
-            var (success, _, error) = await ExecuteGitCommandAsync("add", "--", filePath);
+            var (success, _, error) = await ExecuteGitCommandAsync(workingDirectory, "add", "--", filePath);
             
             if (success)
             {
@@ -345,11 +345,11 @@ public class GitService
     /// <summary>
     /// Unstages a file
     /// </summary>
-    public async Task<(bool Success, string Message)> UnstageFileAsync(string filePath)
+    public async Task<(bool Success, string Message)> UnstageFileAsync(string filePath, string? workingDirectory = null)
     {
         try
         {
-            var (success, _, error) = await ExecuteGitCommandAsync("reset", "HEAD", "--", filePath);
+            var (success, _, error) = await ExecuteGitCommandAsync(workingDirectory, "reset", "HEAD", "--", filePath);
             
             if (success)
             {
@@ -369,17 +369,17 @@ public class GitService
     /// <summary>
     /// Discards changes to a file
     /// </summary>
-    public async Task<(bool Success, string Message)> DiscardFileChangesAsync(string filePath)
+    public async Task<(bool Success, string Message)> DiscardFileChangesAsync(string filePath, string? workingDirectory = null)
     {
         try
         {
             // First check if file is tracked
-            var (tracked, _, _) = await ExecuteGitCommandAsync("ls-files", "--error-unmatch", filePath);
+            var (tracked, _, _) = await ExecuteGitCommandAsync(workingDirectory, "ls-files", "--error-unmatch", filePath);
             
             if (tracked)
             {
                 // Tracked file: restore from HEAD
-                var (success, _, error) = await ExecuteGitCommandAsync("checkout", "HEAD", "--", filePath);
+                var (success, _, error) = await ExecuteGitCommandAsync(workingDirectory, "checkout", "HEAD", "--", filePath);
                 
                 if (success)
                 {
@@ -392,7 +392,8 @@ public class GitService
             else
             {
                 // Untracked file: just delete it
-                var fullPath = Path.Combine(_context.GetAbsolutePath(), filePath);
+                var workDir = workingDirectory ?? _context.GetAbsolutePath();
+                var fullPath = Path.Combine(workDir, filePath);
                 if (File.Exists(fullPath))
                 {
                     File.Delete(fullPath);
@@ -417,7 +418,7 @@ public class GitService
     /// <summary>
     /// Creates a commit with the given message
     /// </summary>
-    public async Task<(bool Success, string Message)> CommitAsync(string message, string? description = null)
+    public async Task<(bool Success, string Message)> CommitAsync(string message, string? description = null, string? workingDirectory = null)
     {
         try
         {
@@ -429,7 +430,7 @@ public class GitService
             // Build full commit message
             var fullMessage = description != null ? $"{message}\n\n{description}" : message;
             
-            var (success, output, error) = await ExecuteGitCommandAsync("commit", "-m", fullMessage);
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "commit", "-m", fullMessage);
             
             if (success)
             {
@@ -453,7 +454,7 @@ public class GitService
     /// <summary>
     /// Gets the list of branches
     /// </summary>
-    public async Task<List<GitBranchInfo>> GetBranchesAsync()
+    public async Task<List<GitBranchInfo>> GetBranchesAsync(string? workingDirectory = null)
     {
         var branches = new List<GitBranchInfo>();
         
@@ -461,6 +462,7 @@ public class GitService
         {
             // Get all branches with additional info
             var (success, output, _) = await ExecuteGitCommandAsync(
+                workingDirectory,
                 "for-each-ref",
                 "--sort=-committerdate",
                 "--format=%(refname:short)|%(objectname:short)|%(committerdate:iso)|%(subject)|%(HEAD)",
@@ -504,6 +506,7 @@ public class GitService
             if (currentBranch != null)
             {
                 var (revSuccess, revOutput, _) = await ExecuteGitCommandAsync(
+                    workingDirectory,
                     "rev-list", "--count", "--left-right", "@{upstream}...HEAD");
                     
                 if (revSuccess && !string.IsNullOrWhiteSpace(revOutput))
@@ -530,11 +533,11 @@ public class GitService
     /// <summary>
     /// Checks out a branch
     /// </summary>
-    public async Task<(bool Success, string Message)> CheckoutBranchAsync(string branchName)
+    public async Task<(bool Success, string Message)> CheckoutBranchAsync(string branchName, string? workingDirectory = null)
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync("checkout", branchName);
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "checkout", branchName);
             
             if (success)
             {
@@ -554,7 +557,7 @@ public class GitService
     /// <summary>
     /// Creates a new branch from the current branch
     /// </summary>
-    public async Task<(bool Success, string Message)> CreateBranchAsync(string branchName)
+    public async Task<(bool Success, string Message)> CreateBranchAsync(string branchName, string? workingDirectory = null)
     {
         try
         {
@@ -569,7 +572,7 @@ public class GitService
                 return (false, "Invalid branch name. Avoid special characters and spaces.");
             }
             
-            var (success, output, error) = await ExecuteGitCommandAsync("checkout", "-b", branchName);
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "checkout", "-b", branchName);
             
             if (success)
             {
@@ -589,11 +592,11 @@ public class GitService
     /// <summary>
     /// Merges a branch into the current branch
     /// </summary>
-    public async Task<(bool Success, string Message)> MergeBranchAsync(string sourceBranch)
+    public async Task<(bool Success, string Message)> MergeBranchAsync(string sourceBranch, string? workingDirectory = null)
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync("merge", sourceBranch);
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "merge", sourceBranch);
             
             if (success)
             {
@@ -634,11 +637,11 @@ public class GitService
     /// <summary>
     /// Pushes changes to remote
     /// </summary>
-    public async Task<(bool Success, string Message)> PushAsync()
+    public async Task<(bool Success, string Message)> PushAsync(string? workingDirectory = null)
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync("push");
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "push");
             
             if (success)
             {
@@ -650,10 +653,11 @@ public class GitService
             if (error.Contains("no upstream branch"))
             {
                 // Get current branch name
-                var (branchSuccess, branchName, _) = await ExecuteGitCommandAsync("branch", "--show-current");
+                var (branchSuccess, branchName, _) = await ExecuteGitCommandAsync(workingDirectory, "branch", "--show-current");
                 if (branchSuccess)
                 {
                     var (pushSuccess, pushOutput, pushError) = await ExecuteGitCommandAsync(
+                        workingDirectory,
                         "push", "--set-upstream", "origin", branchName.Trim());
                         
                     if (pushSuccess)
@@ -677,11 +681,11 @@ public class GitService
     /// <summary>
     /// Fetches changes from remote
     /// </summary>
-    public async Task<(bool Success, string Message)> FetchAsync()
+    public async Task<(bool Success, string Message)> FetchAsync(string? workingDirectory = null)
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync("fetch", "--all", "--prune");
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "fetch", "--all", "--prune");
             
             if (success)
             {
@@ -702,12 +706,12 @@ public class GitService
 
     #region Command Execution
 
-    private async Task<(bool Success, string Output, string Error)> ExecuteGitCommandAsync(params string[] args)
+    private async Task<(bool Success, string Output, string Error)> ExecuteGitCommandAsync(string? workingDirectory, params string[] args)
     {
-        return await ExecuteCommandAsync("git", args);
+        return await ExecuteCommandAsync("git", workingDirectory, args);
     }
 
-    private async Task<(bool Success, string Output, string Error)> ExecuteCommandAsync(string command, params string[] args)
+    private async Task<(bool Success, string Output, string Error)> ExecuteCommandAsync(string command, string? workingDirectory, params string[] args)
     {
         try
         {
@@ -718,7 +722,7 @@ public class GitService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = _context.GetAbsolutePath()
+                WorkingDirectory = workingDirectory ?? _context.GetAbsolutePath()
             };
             
             foreach (var arg in args)
