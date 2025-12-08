@@ -19,6 +19,38 @@ public class GitService
         _logger = logger;
     }
 
+    /// <summary>
+    /// Validates and normalizes a working directory path to prevent path traversal attacks
+    /// </summary>
+    private string ValidateAndGetWorkingDirectory(string? workingDirectory)
+    {
+        // If no working directory provided, use context default
+        if (string.IsNullOrWhiteSpace(workingDirectory))
+        {
+            return _context.GetAbsolutePath();
+        }
+
+        try
+        {
+            // Normalize the path
+            var normalizedPath = Path.GetFullPath(workingDirectory);
+
+            // Check if the directory exists
+            if (!Directory.Exists(normalizedPath))
+            {
+                _logger.LogWarning("Working directory does not exist: {Path}", normalizedPath);
+                return _context.GetAbsolutePath();
+            }
+
+            return normalizedPath;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error validating working directory: {Path}", workingDirectory);
+            return _context.GetAbsolutePath();
+        }
+    }
+
     #region Authentication
 
     /// <summary>
@@ -715,6 +747,8 @@ public class GitService
     {
         try
         {
+            var validatedWorkingDirectory = ValidateAndGetWorkingDirectory(workingDirectory);
+            
             var startInfo = new ProcessStartInfo
             {
                 FileName = command,
@@ -722,7 +756,7 @@ public class GitService
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = workingDirectory ?? _context.GetAbsolutePath()
+                WorkingDirectory = validatedWorkingDirectory
             };
             
             foreach (var arg in args)
