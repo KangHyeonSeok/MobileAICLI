@@ -673,7 +673,7 @@ public class GitService
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "push");
+            var (success, _, error) = await ExecuteGitCommandAsync(workingDirectory, "push");
             
             if (success)
             {
