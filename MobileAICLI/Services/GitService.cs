@@ -717,7 +717,7 @@ public class GitService
     {
         try
         {
-            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "fetch", "--all", "--prune");
+            var (success, _, error) = await ExecuteGitCommandAsync(workingDirectory, "fetch", "--all", "--prune");
             
             if (success)
             {
