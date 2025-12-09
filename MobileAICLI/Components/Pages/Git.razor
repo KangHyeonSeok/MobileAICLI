@@ -357,7 +357,6 @@
     .file-item {
         position: relative;
         overflow: hidden;
-        background: var(--bs-danger);
     }
 
     .file-content {
@@ -368,16 +367,17 @@
         gap: 8px;
         cursor: pointer;
         transition: transform 0.2s ease, background 0.15s;
-        background: var(--bs-body-bg, white);
+        background: #ffffff;
         width: 100%;
+        z-index: 10;
     }
 
     .file-content:hover {
-        background: var(--bs-light);
+        background: var(--bs-light, #f8f9fa);
     }
 
     .file-item.selected .file-content {
-        background: var(--bs-primary-bg-subtle);
+        background: var(--bs-primary-bg-subtle, #cfe2ff);
     }
 
     .file-checkbox input {
@@ -426,21 +426,25 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 12px;
-        background: var(--bs-danger);
+        padding: 0 8px;
+        background: #dc3545;
         width: 80px;
+        z-index: 5;
     }
 
     .file-actions .btn {
-        color: white !important;
+        color: #ffffff !important;
         border: none;
         white-space: nowrap;
-        font-size: 0.85rem;
-        padding: 6px 10px;
+        font-size: 0.75rem;
+        padding: 4px 8px;
         background: transparent;
+        min-height: auto !important;
+        width: auto !important;
     }
 
-    .file-actions .btn:hover {
+    .file-actions .btn:hover,
+    .file-actions .btn:active {
         background: rgba(255,255,255,0.2);
     }
 
