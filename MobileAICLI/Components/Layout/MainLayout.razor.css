@@ -8,7 +8,7 @@
 main {
     flex: 1;
     min-width: 0;
-    padding-top: 4rem;
+    padding-top: 0;
 }
 
 /* 플로팅 토글 버튼 */
