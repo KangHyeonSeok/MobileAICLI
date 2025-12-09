@@ -1,8 +1,19 @@
+/* Mobile viewport height fix */
+:root {
+    --vh: 1vh;
+}
+
 html,
 body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: clamp(16px, 4vw, 18px);
     /* 모바일 우선 + 소형 화면 확대 */
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    /* Prevent pull-to-refresh and overscroll */
+    overscroll-behavior-y: none;
+    -webkit-overflow-scrolling: touch;
 }
 
 a,

@@ -3,8 +3,15 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <base href="/" />
+    
+    <!-- PWA / Fullscreen Mode -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#1b6ec2" />
+    
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" />
     <link rel="stylesheet" href="app.css" />
@@ -18,6 +25,7 @@
     <script src="_framework/blazor.web.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/clientinfo.js"></script>
+    <script src="js/mobile.js"></script>
 </body>
 
 </html>
