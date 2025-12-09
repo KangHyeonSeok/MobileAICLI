@@ -1,61 +1,47 @@
-// Mobile address bar auto-hide functionality
-(function() {
+// Mobile viewport and address bar fixes
+(function () {
     'use strict';
 
-    // Function to hide address bar on mobile
-    function hideAddressBar() {
-        if (!window.location.hash) {
-            if (document.height < window.outerHeight) {
-                document.body.style.height = (window.outerHeight + 50) + 'px';
-            }
-            setTimeout(function() {
-                window.scrollTo(0, 1);
-            }, 50);
-        }
-    }
-
-    // Hide address bar on page load
-    window.addEventListener('load', function() {
-        setTimeout(hideAddressBar, 0);
-    });
-
-    // Re-hide on orientation change
-    window.addEventListener('orientationchange', function() {
-        setTimeout(hideAddressBar, 100);
-    });
-
-    // Prevent pull-to-refresh on mobile
-    let lastTouchY = 0;
-    let preventPullToRefresh = false;
-
-    document.addEventListener('touchstart', function(e) {
-        if (e.touches.length !== 1) { return; }
-        lastTouchY = e.touches[0].clientY;
-        preventPullToRefresh = window.pageYOffset === 0;
-    }, { passive: false });
-
-    document.addEventListener('touchmove', function(e) {
-        const touchY = e.touches[0].clientY;
-        const touchYDelta = touchY - lastTouchY;
-        lastTouchY = touchY;
-
-        if (preventPullToRefresh) {
-            // Prevent pull-to-refresh if at top of page
-            if (touchYDelta > 0) {
-                e.preventDefault();
-                return;
-            }
-        }
-    }, { passive: false });
-
-    // Make viewport height consistent (for mobile browsers with dynamic UI)
+    // Set accurate viewport height for mobile browsers
     function setViewportHeight() {
-        const vh = window.innerHeight * 0.01;
+        // Use visualViewport if available (more accurate on mobile)
+        const vh = (window.visualViewport ? window.visualViewport.height : window.innerHeight) * 0.01;
         document.documentElement.style.setProperty('--vh', `${vh}px`);
+
+        // Also set the actual height on html/body for mobile Chrome
+        document.documentElement.style.height = window.innerHeight + 'px';
+        document.body.style.height = window.innerHeight + 'px';
     }
 
-    window.addEventListener('resize', setViewportHeight);
-    window.addEventListener('orientationchange', setViewportHeight);
+    // Initialize immediately
     setViewportHeight();
+
+    // Update on various events
+    window.addEventListener('load', setViewportHeight);
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', function () {
+        // Delay for orientation change to complete
+        setTimeout(setViewportHeight, 100);
+    });
+
+    // Use visualViewport API if available
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', setViewportHeight);
+        window.visualViewport.addEventListener('scroll', setViewportHeight);
+    }
+
+    // Prevent body scroll/bounce on iOS
+    document.body.addEventListener('touchmove', function (e) {
+        // Only prevent if scrolling at the top of page and scrolling up
+        if (document.body.scrollTop === 0 && e.touches[0].clientY > 0) {
+            // Allow normal scrolling
+        }
+    }, { passive: true });
+
+    // Fix for mobile Chrome address bar
+    // Force recalculation after paint
+    requestAnimationFrame(function () {
+        setViewportHeight();
+    });
 
 })();

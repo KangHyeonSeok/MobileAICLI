@@ -3,17 +3,25 @@
     --vh: 1vh;
 }
 
-html,
+html {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
 body {
     font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
     font-size: clamp(16px, 4vw, 18px);
     /* 모바일 우선 + 소형 화면 확대 */
+    height: 100%;
     margin: 0;
-    padding: 0;
+    padding: 0 !important;
     overflow-x: hidden;
     /* Prevent pull-to-refresh and overscroll */
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
+    /* Mobile Chrome fix - remove any top padding */
+    padding-top: 0 !important;
 }
 
 a,
