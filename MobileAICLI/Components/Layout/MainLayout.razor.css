@@ -11,6 +11,10 @@ main {
     flex: 1;
     min-width: 0;
     padding-top: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: env(safe-area-inset-bottom, 20px);
+    /* Safe area padding */
 }
 
 /* 플로팅 토글 버튼 */

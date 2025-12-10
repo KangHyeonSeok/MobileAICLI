@@ -21,8 +21,8 @@ body {
     height: 100%;
     margin: 0 !important;
     padding: 0 !important;
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
+    /* Prevent body scroll */
     /* Prevent pull-to-refresh and overscroll */
     overscroll-behavior-y: none;
     -webkit-overflow-scrolling: touch;
@@ -31,7 +31,7 @@ body {
     left: 0 !important;
     /* Safe area handling */
     padding-top: env(safe-area-inset-top, 0) !important;
-    padding-bottom: env(safe-area-inset-bottom, 0) !important;
+    /* content padding handled in main layout */
 }
 
 a,
