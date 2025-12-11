@@ -68,6 +68,9 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ToolDiscoveryService>();
 builder.Services.AddScoped<GitService>();
 
+// Add Interactive Mode services
+builder.Services.AddSingleton<ICopilotSessionService, CopilotSessionService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
