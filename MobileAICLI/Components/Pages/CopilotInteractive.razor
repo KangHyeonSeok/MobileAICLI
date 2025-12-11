@@ -1,0 +1,482 @@
+@page "/copilot/interactive"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.SignalR.Client
+@using MobileAICLI.Models
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+<PageTitle>Copilot Interactive Chat</PageTitle>
+
+<div class="copilot-interactive-container d-flex flex-column">
+    @* 상태 배너 *@
+    <div class="status-banner border-bottom bg-light p-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <span class="status-indicator @GetStatusClass()"></span>
+                <small class="text-muted">@_statusMessage</small>
+            </div>
+            <div class="d-flex gap-2">
+                <button class="btn btn-xs btn-outline-danger" 
+                        @onclick="EndSessionAsync" 
+                        disabled="@(!_isConnected || string.IsNullOrEmpty(_sessionId))"
+                        title="End Session">
+                    종료
+                </button>
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(_errorMessage))
+        {
+            <div class="alert alert-danger alert-sm mt-2 mb-0" role="alert">
+                @_errorMessage
+                @if (_showFallbackButton)
+                {
+                    <div class="mt-2">
+                        <a href="/copilot" class="btn btn-sm btn-primary">Programmatic 모드로 이동</a>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* 메시지 영역 *@
+    <div class="message-area flex-grow-1 overflow-auto p-3" @ref="_messageContainer">
+        @if (_messages.Count == 0)
+        {
+            <div class="text-center text-muted py-5">
+                <h5>🤖 Copilot Interactive Chat</h5>
+                <p>Start a conversation with Copilot. Your context will be maintained throughout the session.</p>
+                <p><small>Example: "Explain the main.cs file" → "What design patterns does it use?"</small></p>
+            </div>
+        }
+        else
+        {
+            @foreach (var message in _messages)
+            {
+                <div class="message mb-3 @(message.Role == "user" ? "message-user" : "message-assistant")">
+                    <div class="message-header mb-1">
+                        <small class="text-muted">
+                            @(message.Role == "user" ? "You" : "Copilot") • @message.Timestamp.ToString("HH:mm:ss")
+                        </small>
+                    </div>
+                    <div class="message-content p-3 rounded @(message.Role == "user" ? "bg-primary text-white" : "bg-light")">
+                        @if (_isStreaming && message == _messages.Last() && message.Role == "assistant")
+                        {
+                            <span style="white-space: pre-wrap;">@message.Content</span>
+                            <span class="typing-indicator">▋</span>
+                        }
+                        else
+                        {
+                            <pre class="mb-0 @(message.Role == "user" ? "text-white" : "")" style="white-space: pre-wrap; word-wrap: break-word;">@message.Content</pre>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </div>
+
+    @* 입력 영역 *@
+    <div class="input-area border-top p-2">
+        <div class="input-group gap-2">
+            <textarea class="form-control" 
+                      rows="2" 
+                      @bind="_currentPrompt" 
+                      @bind:event="oninput"
+                      @onkeydown="HandleKeyDown"
+                      placeholder="Ask Copilot..."
+                      disabled="@(!_isConnected || _isStreaming || string.IsNullOrEmpty(_sessionId))"></textarea>
+            <button class="btn btn-primary btn-send" 
+                    @onclick="SendMessageAsync" 
+                    disabled="@(!_isConnected || _isStreaming || string.IsNullOrWhiteSpace(_currentPrompt) || string.IsNullOrEmpty(_sessionId))"
+                    aria-label="Send">
+                @if (_isStreaming)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status"></span>
+                }
+                else
+                {
+                    <span>✈️</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .copilot-interactive-container {
+        height: 100%;
+        overflow: hidden;
+        padding: 0;
+    }
+
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .status-connected {
+        background-color: #28a745;
+    }
+
+    .status-connecting {
+        background-color: #ffc107;
+    }
+
+    .status-error {
+        background-color: #dc3545;
+    }
+
+    .message-area {
+        scroll-behavior: smooth;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .message-user .message-content {
+        margin-left: 20%;
+    }
+
+    .message-assistant .message-content {
+        margin-right: 20%;
+    }
+
+    .typing-indicator {
+        animation: blink 1s infinite;
+    }
+
+    @@keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+
+    .input-area {
+        position: sticky;
+        bottom: 0;
+        background: white;
+    }
+
+    /* iOS keyboard support */
+    @@supports (-webkit-touch-callout: none) {
+        .input-area {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    }
+
+    .btn-xs {
+        --bs-btn-padding-y: 4px;
+        --bs-btn-padding-x: 8px;
+        --bs-btn-font-size: 0.9rem;
+        min-height: 32px;
+    }
+
+    .btn-send {
+        min-width: 52px;
+        min-height: 52px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        font-size: 1.1rem;
+    }
+
+    .alert-sm {
+        padding: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    pre {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        font-size: 0.9em;
+    }
+
+    /* Mobile optimizations */
+    @@media (max-width: 1080px), (pointer: coarse) {
+        .message-user .message-content {
+            margin-left: 10%;
+        }
+
+        .message-assistant .message-content {
+            margin-right: 10%;
+        }
+
+        .btn-send {
+            width: auto !important;
+            min-width: 52px !important;
+            flex: 0 0 auto;
+        }
+
+        .input-area .form-control {
+            margin-bottom: 0 !important;
+            min-height: 52px;
+        }
+    }
+</style>
+
+@code {
+    private HubConnection? _hubConnection;
+    private List<CopilotInteractiveMessage> _messages = new();
+    private string _currentPrompt = string.Empty;
+    private string? _sessionId;
+    private bool _isConnected = false;
+    private bool _isStreaming = false;
+    private string _statusMessage = "초기화 중...";
+    private string _errorMessage = string.Empty;
+    private bool _showFallbackButton = false;
+    private ElementReference _messageContainer;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await InitializeHubConnection();
+    }
+
+    private async Task InitializeHubConnection()
+    {
+        try
+        {
+            _statusMessage = "연결 중...";
+            StateHasChanged();
+
+            _hubConnection = new HubConnectionBuilder()
+                .WithUrl(NavigationManager.ToAbsoluteUri("/hubs/copilot-interactive"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            // Register event handlers
+            _hubConnection.On<string>("ReceiveChunk", OnReceiveChunk);
+            _hubConnection.On("ReceiveComplete", OnReceiveComplete);
+            _hubConnection.On<string>("ReceiveError", OnReceiveError);
+            _hubConnection.On<string>("ReceiveFallbackSuggestion", OnFallbackSuggestion);
+            _hubConnection.On<string>("SessionReady", OnSessionReady);
+
+            _hubConnection.Reconnecting += (error) =>
+            {
+                _statusMessage = "재연결 중...";
+                _isConnected = false;
+                StateHasChanged();
+                return Task.CompletedTask;
+            };
+
+            _hubConnection.Reconnected += async (connectionId) =>
+            {
+                _statusMessage = "재연결됨. 세션 재시작 중...";
+                StateHasChanged();
+                await StartSessionAsync();
+            };
+
+            _hubConnection.Closed += (error) =>
+            {
+                _statusMessage = "연결 끊김";
+                _isConnected = false;
+                _errorMessage = error?.Message ?? "Connection closed";
+                StateHasChanged();
+                return Task.CompletedTask;
+            };
+
+            await _hubConnection.StartAsync();
+            _isConnected = true;
+            _statusMessage = "세션 시작 중...";
+            StateHasChanged();
+
+            await StartSessionAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = "연결 실패";
+            _errorMessage = $"Failed to connect: {ex.Message}";
+            _isConnected = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task StartSessionAsync()
+    {
+        try
+        {
+            if (_hubConnection == null) return;
+
+            _statusMessage = "세션 시작 중...";
+            StateHasChanged();
+
+            await _hubConnection.InvokeAsync("StartSession");
+            // SessionReady will be called when the session is ready
+        }
+        catch (Exception ex)
+        {
+            _statusMessage = "세션 시작 실패";
+            _errorMessage = $"Failed to start session: {ex.Message}";
+            _showFallbackButton = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentPrompt) || _hubConnection == null || string.IsNullOrEmpty(_sessionId))
+            return;
+
+        try
+        {
+            // Add user message
+            var userMessage = new CopilotInteractiveMessage
+            {
+                SessionId = _sessionId,
+                Role = "user",
+                Content = _currentPrompt,
+                Timestamp = DateTime.Now
+            };
+            _messages.Add(userMessage);
+
+            // Prepare streaming message
+            var assistantMessage = new CopilotInteractiveMessage
+            {
+                SessionId = _sessionId,
+                Role = "assistant",
+                Content = string.Empty,
+                Timestamp = DateTime.Now
+            };
+            _messages.Add(assistantMessage);
+
+            var prompt = _currentPrompt;
+            _currentPrompt = string.Empty;
+            _isStreaming = true;
+            _errorMessage = string.Empty;
+            StateHasChanged();
+
+            await ScrollToBottom();
+
+            // Stream response
+            await foreach (var chunk in _hubConnection.StreamAsync<string>("SendMessage", _sessionId, prompt))
+            {
+                assistantMessage.Content += chunk;
+                StateHasChanged();
+                await ScrollToBottom();
+            }
+
+            _isStreaming = false;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            _isStreaming = false;
+            _errorMessage = $"Error sending message: {ex.Message}";
+            _showFallbackButton = true;
+            StateHasChanged();
+        }
+    }
+
+    private async Task EndSessionAsync()
+    {
+        try
+        {
+            if (_hubConnection != null && !string.IsNullOrEmpty(_sessionId))
+            {
+                await _hubConnection.InvokeAsync("EndSession", _sessionId);
+                _sessionId = null;
+                _statusMessage = "세션 종료됨";
+                _isConnected = false;
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Error ending session: {ex.Message}";
+            StateHasChanged();
+        }
+    }
+
+    private void OnSessionReady(string sessionId)
+    {
+        _sessionId = sessionId;
+        _statusMessage = "연결됨 - 준비 완료";
+        _isConnected = true;
+        _errorMessage = string.Empty;
+        StateHasChanged();
+    }
+
+    private void OnReceiveChunk(string chunk)
+    {
+        if (_messages.Count > 0)
+        {
+            var lastMessage = _messages.Last();
+            if (lastMessage.Role == "assistant")
+            {
+                lastMessage.Content += chunk;
+                StateHasChanged();
+                _ = ScrollToBottom();
+            }
+        }
+    }
+
+    private void OnReceiveComplete()
+    {
+        _isStreaming = false;
+        StateHasChanged();
+    }
+
+    private void OnReceiveError(string error)
+    {
+        _isStreaming = false;
+        _errorMessage = $"오류: {error}";
+        StateHasChanged();
+    }
+
+    private void OnFallbackSuggestion(string message)
+    {
+        _errorMessage = message;
+        _showFallbackButton = true;
+        StateHasChanged();
+    }
+
+    private string GetStatusClass()
+    {
+        if (_isConnected && !string.IsNullOrEmpty(_sessionId))
+            return "status-connected";
+        else if (_isConnected)
+            return "status-connecting";
+        else
+            return "status-error";
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            // Use JavaScript interop to scroll - will be implemented when needed
+            await Task.CompletedTask;
+        }
+        catch
+        {
+            // Ignore scroll errors
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        // Send on Enter (without Shift) - no preventDefault in Blazor
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection != null)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_sessionId))
+                {
+                    await _hubConnection.InvokeAsync("EndSession", _sessionId);
+                }
+                await _hubConnection.DisposeAsync();
+            }
+            catch
+            {
+                // Ignore disposal errors
+            }
+        }
+    }
+}
