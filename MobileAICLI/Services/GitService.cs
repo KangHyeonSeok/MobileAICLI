@@ -734,6 +734,43 @@ public class GitService
         }
     }
 
+    /// <summary>
+    /// Pulls changes from remote (fetch + merge)
+    /// </summary>
+    public async Task<(bool Success, string Message)> PullAsync(string? workingDirectory = null)
+    {
+        try
+        {
+            var (success, output, error) = await ExecuteGitCommandAsync(workingDirectory, "pull");
+            
+            if (success)
+            {
+                _logger.LogInformation("Pulled changes from remote");
+                
+                // Check if there were actual changes or it was already up-to-date
+                if (output.Contains("Already up to date") || output.Contains("Already up-to-date"))
+                {
+                    return (true, "Already up to date");
+                }
+                
+                return (true, "Pulled changes successfully");
+            }
+            
+            // Check for merge conflict
+            if (error.Contains("CONFLICT") || output.Contains("CONFLICT"))
+            {
+                return (false, "Merge conflict detected. Please resolve conflicts manually.");
+            }
+            
+            return (false, error);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error pulling from remote");
+            return (false, ex.Message);
+        }
+    }
+
     #endregion
 
     #region Command Execution

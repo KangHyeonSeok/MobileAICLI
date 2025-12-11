@@ -61,8 +61,11 @@
             <button class="btn btn-sm btn-outline-secondary branch-btn" @onclick="OpenBranchModal" disabled="@(!isConnected)" title="Switch Branch">
                 <span class="bi bi-git"></span>
             </button>
-            <button class="btn btn-sm btn-outline-primary" @onclick="Fetch" disabled="@(!isConnected || isLoading)" title="Fetch">
-                ↓
+            <button class="btn btn-sm @(ShouldShowPull() ? "btn-primary" : "btn-outline-primary")" 
+                    @onclick="FetchOrPull" 
+                    disabled="@(!isConnected || isLoading)" 
+                    title="@(ShouldShowPull() ? "Pull" : "Fetch")">
+                @(ShouldShowPull() ? "↓ Pull" : "↓")
             </button>
             <button class="btn btn-sm btn-primary" @onclick="Push" disabled="@(!isConnected || isLoading)" title="Push">
                 ↑
@@ -988,6 +991,23 @@
         }
     }
 
+    private bool ShouldShowPull()
+    {
+        return status != null && status.BehindBy > 0;
+    }
+
+    private async Task FetchOrPull()
+    {
+        if (ShouldShowPull())
+        {
+            await Pull();
+        }
+        else
+        {
+            await Fetch();
+        }
+    }
+
     private async Task Fetch()
     {
         if (hubConnection is null) return;
@@ -999,6 +1019,39 @@
             StateHasChanged();
 
             var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Fetch", currentRepoPath);
+
+            if (result.Success)
+            {
+                ShowMessage(result.Message, false);
+                await RefreshChanges();
+            }
+            else
+            {
+                ShowMessage(result.Message, true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error: {ex.Message}", true);
+        }
+        finally
+        {
+            isLoading = false;
+            loadingMessage = null;
+        }
+    }
+
+    private async Task Pull()
+    {
+        if (hubConnection is null) return;
+
+        try
+        {
+            isLoading = true;
+            loadingMessage = "Pulling changes...";
+            StateHasChanged();
+
+            var result = await hubConnection.InvokeAsync<(bool Success, string Message)>("Pull", currentRepoPath);
 
             if (result.Success)
             {

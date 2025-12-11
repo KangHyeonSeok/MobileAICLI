@@ -240,6 +240,22 @@ public class GitHub : Hub
         return result;
     }
 
+    /// <summary>
+    /// Pulls changes from remote (fetch + merge)
+    /// </summary>
+    public async Task<(bool Success, string Message)> Pull(string? workingDirectory = null)
+    {
+        _logger.LogInformation("Pull called for directory: {WorkingDirectory}", workingDirectory ?? "default");
+        
+        await Clients.Caller.SendAsync("OperationStarted", "pull");
+        
+        var result = await _gitService.PullAsync(workingDirectory);
+        
+        await Clients.Caller.SendAsync("OperationCompleted", "pull", result.Success, result.Message);
+        
+        return result;
+    }
+
     #endregion
 
     #region Connection Events
