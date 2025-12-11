@@ -40,8 +40,9 @@ public class CopilotInteractiveHub : Hub
     {
         _logger.LogInformation("SendMessage called for session {SessionId} - not yet implemented", sessionId);
         await Task.CompletedTask;
-        yield return "SendMessage will be implemented in Issue 1";
-        throw new NotImplementedException("SendMessage will be implemented in Issue 1");
+        // Yield a placeholder message since this is skeleton code
+        // Will be implemented in Issue 1
+        yield return "This feature will be implemented in Issue 1";
     }
 
     /// <summary>

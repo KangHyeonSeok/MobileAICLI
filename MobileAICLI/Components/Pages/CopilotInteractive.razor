@@ -5,6 +5,7 @@
 @using Microsoft.JSInterop
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JSRuntime
+@inject ILogger<CopilotInteractive> Logger
 @implements IAsyncDisposable
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -447,9 +448,18 @@
         {
             await JSRuntime.InvokeVoidAsync("copilotInteractive.scrollToBottomSmooth", "message-container");
         }
-        catch
+        catch (JSException jsEx)
         {
-            // Ignore scroll errors - JSInterop might not be ready yet
+            // JSInterop might not be ready yet or function not found
+            Logger.LogDebug(jsEx, "JavaScript interop error during scroll");
+        }
+        catch (JSDisconnectedException)
+        {
+            // Circuit disconnected, ignore
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Unexpected error during scroll");
         }
     }
 
@@ -474,9 +484,10 @@
                 }
                 await _hubConnection.DisposeAsync();
             }
-            catch
+            catch (Exception ex)
             {
-                // Ignore disposal errors
+                // Log disposal errors but don't throw
+                Logger.LogDebug(ex, "Error during hub connection disposal");
             }
         }
     }
