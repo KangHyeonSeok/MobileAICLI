@@ -28,6 +28,32 @@ public class MobileAICLISettings
     /// </summary>
     public List<string> AllowedCopilotModels { get; set; } = new() { "default", "gpt-4", "gpt-3.5-turbo", "claude-3.5-sonnet" };
 
+    // Interactive Mode settings
+    /// <summary>
+    /// Interactive session timeout in minutes (default: 15 minutes)
+    /// </summary>
+    public int CopilotInteractiveSessionTimeoutMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// Maximum number of concurrent interactive sessions across all users (default: 20)
+    /// </summary>
+    public int CopilotInteractiveMaxSessions { get; set; } = 20;
+
+    /// <summary>
+    /// Timeout in seconds to wait for prompt pattern after sending a message (default: 3 seconds)
+    /// </summary>
+    public int CopilotInteractivePromptTimeoutSeconds { get; set; } = 3;
+
+    /// <summary>
+    /// Regular expression pattern to detect copilot prompt (default: "> " at end of line)
+    /// </summary>
+    public string CopilotInteractivePromptPattern { get; set; } = @">\s?$";
+
+    /// <summary>
+    /// Maximum length of a single prompt in characters (default: 10000)
+    /// </summary>
+    public int CopilotInteractiveMaxPromptLength { get; set; } = 10000;
+
     /// <summary>
     /// Validates model name and returns default value if model is not allowed
     /// </summary>
