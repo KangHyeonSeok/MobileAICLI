@@ -27,8 +27,8 @@ public interface ICopilotSessionService
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <param name="sessionId">Session identifier</param>
-    /// <returns>Task representing the removal operation</returns>
-    Task RemoveSessionAsync(string userId, string sessionId);
+    /// <returns>Task containing true if the session was removed, false if it did not exist or was not owned by the user</returns>
+    Task<bool> RemoveSessionAsync(string userId, string sessionId);
 
     /// <summary>
     /// Get the number of active sessions across all users
