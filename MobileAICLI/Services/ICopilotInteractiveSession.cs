@@ -21,8 +21,12 @@ public interface ICopilotInteractiveSession : IDisposable
     /// Initialize the interactive copilot process and wait for the initial prompt
     /// </summary>
     /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Task representing the initialization operation</returns>
-    Task InitializeAsync(CancellationToken cancellationToken = default);
+    /// <returns>
+    /// Task representing the initialization operation.
+    /// Returns a tuple (Success, Error) where Success indicates if initialization succeeded,
+    /// and Error contains an error message if initialization failed.
+    /// </returns>
+    Task<(bool Success, string Error)> InitializeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Write a message to the copilot process stdin
