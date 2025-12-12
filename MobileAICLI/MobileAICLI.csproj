@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+    <PackageReference Include="Pty.Net" Version="0.1.16-pre" />
   </ItemGroup>
 
 </Project>
