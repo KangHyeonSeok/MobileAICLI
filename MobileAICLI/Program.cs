@@ -68,6 +68,9 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ToolDiscoveryService>();
 builder.Services.AddScoped<GitService>();
 
+// Interactive Mode services - singleton for session management
+builder.Services.AddSingleton<ICopilotSessionService, CopilotSessionService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -97,6 +100,7 @@ if (settings.EnableAuthentication)
 {
     app.MapHub<ShellHub>("/shellhub").RequireAuthorization();
     app.MapHub<CopilotHub>("/copilothub").RequireAuthorization();
+    app.MapHub<CopilotInteractiveHub>("/copilotinteractivehub").RequireAuthorization();
     app.MapHub<TestHub>("/testhub").RequireAuthorization();
     app.MapHub<GitHub>("/github").RequireAuthorization();
 }
@@ -104,6 +108,7 @@ else
 {
     app.MapHub<ShellHub>("/shellhub");
     app.MapHub<CopilotHub>("/copilothub");
+    app.MapHub<CopilotInteractiveHub>("/copilotinteractivehub");
     app.MapHub<TestHub>("/testhub");
     app.MapHub<GitHub>("/github");
 }
