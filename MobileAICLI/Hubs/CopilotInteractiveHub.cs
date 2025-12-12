@@ -388,7 +388,7 @@ public class CopilotInteractiveHub : Hub
     // Server → Client method signatures (for documentation)
     // These are called by the server and received by the client:
     // - SessionReady(string sessionId): Called when a new session is initialized and ready
-    // - ReceiveChunk(string chunk): Called for each chunk of streaming response (via yield return)
+    // - Streaming chunks: Returned to the client as the IAsyncEnumerable return value of the streaming hub method (each yielded value is sent automatically)
     // - ReceiveComplete(): Called when response streaming is complete
     // - ReceiveError(string error): Called when an error occurs
     // - ReceiveFallbackSuggestion(string suggestion): Called to suggest fallback to Programmatic mode
