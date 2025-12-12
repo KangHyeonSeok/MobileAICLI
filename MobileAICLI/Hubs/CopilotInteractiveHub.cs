@@ -148,7 +148,31 @@ public class CopilotInteractiveHub : Hub
         try
         {
             // Write prompt to session
-            await session.WriteAsync(prompt, cancellationToken);
+            try
+            {
+                await session.WriteAsync(prompt, cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Session not ready when writing prompt for session {SessionId}", sessionId);
+                await Clients.Caller.SendAsync("ReceiveError", "Session is not available or has been closed. Please restart the session.", cancellationToken);
+                hasError = true;
+                yield break;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "Session disposed when writing prompt for session {SessionId}", sessionId);
+                await Clients.Caller.SendAsync("ReceiveError", "Session has been disposed. Please restart the session.", cancellationToken);
+                hasError = true;
+                yield break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error when writing prompt for session {SessionId}", sessionId);
+                await Clients.Caller.SendAsync("ReceiveError", "Unexpected error occurred when sending prompt to session.", cancellationToken);
+                hasError = true;
+                yield break;
+            }
 
             // Get the enumerator
             enumerator = session.ReadResponseAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
