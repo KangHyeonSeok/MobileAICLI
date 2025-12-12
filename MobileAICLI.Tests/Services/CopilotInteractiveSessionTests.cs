@@ -123,7 +123,7 @@ public class CopilotInteractiveSessionTests
         // Act & Assert
         await Assert.ThrowsAsync<ObjectDisposedException>(async () =>
         {
-            await foreach (var chunk in session.ReadResponseAsync())
+            await foreach (var _ in session.ReadResponseAsync())
             {
                 // Should throw before reaching here
             }
