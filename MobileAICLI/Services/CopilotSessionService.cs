@@ -236,18 +236,17 @@ public class CopilotSessionService : ICopilotSessionService, IDisposable
             .OrderBy(kvp => kvp.Value)
             .Take(count)
             .Select(kvp => kvp.Key)
+            .Where(sessionId => _sessionOwners.ContainsKey(sessionId))
             .ToList();
 
         foreach (var sessionId in oldestSessions)
         {
-            if (_sessionOwners.TryGetValue(sessionId, out var userId))
-            {
-                _logger.LogInformation("Removing oldest session {SessionId} for user {UserId}",
-                    sessionId, userId);
-                
-                // Use Task.Run to avoid blocking
-                Task.Run(async () => await RemoveSessionAsync(userId, sessionId));
-            }
+            var userId = _sessionOwners[sessionId];
+            _logger.LogInformation("Removing oldest session {SessionId} for user {UserId}",
+                sessionId, userId);
+            
+            // Use Task.Run to avoid blocking
+            Task.Run(async () => await RemoveSessionAsync(userId, sessionId));
         }
     }
 
