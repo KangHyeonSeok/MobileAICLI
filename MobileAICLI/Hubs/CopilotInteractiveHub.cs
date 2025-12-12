@@ -308,9 +308,15 @@ public class CopilotInteractiveHub : Hub
         var userId = GetUserId();
         var isAuthenticated = Context.User?.Identity?.IsAuthenticated ?? false;
 
-        if (!isAuthenticated || string.IsNullOrEmpty(userId))
+        if (!isAuthenticated)
         {
             _logger.LogWarning("Unauthenticated connection attempt from {ConnectionId}", Context.ConnectionId);
+            Context.Abort();
+            return;
+        }
+        if (string.IsNullOrEmpty(userId))
+        {
+            _logger.LogWarning("Authenticated connection attempt with missing user ID from {ConnectionId}", Context.ConnectionId);
             Context.Abort();
             return;
         }
