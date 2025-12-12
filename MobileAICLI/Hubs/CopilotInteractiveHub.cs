@@ -40,8 +40,6 @@ public class CopilotInteractiveHub : Hub
     {
         _logger.LogInformation("SendMessage called for session {SessionId} - not yet implemented", sessionId);
         await Task.CompletedTask;
-        // Yield at least one item to satisfy async iterator requirements
-        yield return "Not yet implemented - will be implemented in Issue 1";
         throw new NotImplementedException("SendMessage will be implemented in Issue 1");
     }
 
