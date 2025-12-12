@@ -77,6 +77,9 @@ public class CopilotInteractiveHub : Hub
     /// <returns>Async enumerable for streaming response chunks</returns>
     public async IAsyncEnumerable<string> SendMessage(string sessionId, string prompt)
     {
+        _logger.LogInformation("SendMessage called for session {SessionId} - not yet implemented", sessionId);
+        await Task.CompletedTask;
+        throw new NotImplementedException("SendMessage will be implemented in Issue 1");
         var userId = GetUserId();
         _logger.LogInformation("SendMessage called for session {SessionId} by user {UserId}", sessionId, userId);
 
