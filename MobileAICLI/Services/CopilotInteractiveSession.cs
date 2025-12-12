@@ -211,7 +211,7 @@ public class CopilotInteractiveSession : ICopilotInteractiveSession
             while (!cancellationToken.IsCancellationRequested)
             {
                 // Wait a bit for data to accumulate
-                await Task.Delay(50, cancellationToken);
+                await Task.Delay(_settings.CopilotInteractivePollingIntervalMs, cancellationToken);
 
                 string currentContent;
                 lock (_outputBuffer)
