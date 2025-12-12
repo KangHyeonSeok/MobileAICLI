@@ -365,9 +365,12 @@ public class CopilotInteractiveHub : Hub
     /// </summary>
     private static string MaskUserId(string userId)
     {
-        if (string.IsNullOrEmpty(userId) || userId.Length <= 2)
+        if (string.IsNullOrEmpty(userId))
             return "***";
-        
+        if (userId.Length == 1)
+            return userId[0] + "***";
+        if (userId.Length == 2)
+            return "***";
         return userId[..2] + "***";
     }
 
