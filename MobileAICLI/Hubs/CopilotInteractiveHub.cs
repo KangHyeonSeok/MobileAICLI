@@ -204,6 +204,7 @@ public class CopilotInteractiveHub : Hub
                     await Clients.Caller.SendAsync("ReceiveFallbackSuggestion",
                         "The session timed out. You can try again or restart the session. Alternatively, use Programmatic mode.",
                         cancellationToken);
+                    capturedException = ex;
                     hasError = true;
                     yield break;
                 }
