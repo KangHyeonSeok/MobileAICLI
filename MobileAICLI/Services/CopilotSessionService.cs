@@ -179,7 +179,11 @@ public class CopilotSessionService : ICopilotSessionService, IDisposable
                 userId, sessionId, metadata.UserId);
             
             // Put it back
-            _sessions.TryAdd(sessionId, metadata);
+            if (!_sessions.TryAdd(sessionId, metadata))
+            {
+                _logger.LogWarning("Failed to re-add session {SessionId} for user {UserId}; disposing session to prevent resource leak.", sessionId, userId);
+                metadata.Session.Dispose();
+            }
             return false;
         }
 
