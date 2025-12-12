@@ -90,7 +90,7 @@ public class CopilotSessionService : ICopilotSessionService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to create session for user {UserId}", userId);
-            return (false, string.Empty, $"Failed to create session: {ex.Message}");
+            return (false, string.Empty, "Failed to create session due to an internal error.");
         }
     }
 
