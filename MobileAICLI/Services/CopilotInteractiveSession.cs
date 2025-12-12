@@ -60,8 +60,8 @@ public class CopilotInteractiveSession : ICopilotInteractiveSession
             // BackendOptions can be null or new instance
             _ptyConnection = PtyProvider.Spawn(
                 command: "copilot",
-                width: 80,
-                height: 24,
+                width: _settings.PtyWidth,
+                height: _settings.PtyHeight,
                 workingDirectory: _settings.RepositoryPath,
                 options: new BackendOptions()
             );
