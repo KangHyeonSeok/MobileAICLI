@@ -195,8 +195,7 @@ public class CopilotInteractiveHub : Hub
                 {
                     _logger.LogInformation("SendMessage cancelled for session {SessionId}", sessionId);
                     await Clients.Caller.SendAsync("ReceiveError", "Operation cancelled", cancellationToken);
-                    hasError = true;
-                    yield break;
+                    break;
                 }
                 catch (TimeoutException ex)
                 {
