@@ -101,6 +101,7 @@ if (settings.EnableAuthentication)
 {
     app.MapHub<ShellHub>("/shellhub").RequireAuthorization();
     app.MapHub<CopilotHub>("/copilothub").RequireAuthorization();
+    app.MapHub<CopilotInteractiveHub>("/hubs/copilot-interactive").RequireAuthorization();
     app.MapHub<CopilotInteractiveHub>("/copilotinteractivehub").RequireAuthorization();
     app.MapHub<TestHub>("/testhub").RequireAuthorization();
     app.MapHub<GitHub>("/github").RequireAuthorization();
@@ -109,6 +110,7 @@ else
 {
     app.MapHub<ShellHub>("/shellhub");
     app.MapHub<CopilotHub>("/copilothub");
+    app.MapHub<CopilotInteractiveHub>("/hubs/copilot-interactive");
     app.MapHub<CopilotInteractiveHub>("/copilotinteractivehub");
     app.MapHub<TestHub>("/testhub");
     app.MapHub<GitHub>("/github");
