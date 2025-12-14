@@ -219,7 +219,7 @@
 
 @code {
     private HubConnection? _hubConnection;
-    private List<CopilotInteractiveMessage> _messages = new();
+    private readonly List<CopilotInteractiveMessage> _messages = new();
     private string _currentPrompt = string.Empty;
     private string? _sessionId;
     private bool _isConnected = false;
