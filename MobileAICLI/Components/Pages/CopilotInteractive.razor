@@ -264,6 +264,8 @@
             _hubConnection.Reconnected += async (connectionId) =>
             {
                 _statusMessage = "재연결됨. 세션 재시작 중...";
+                _sessionId = null;
+                _messages.Clear();
                 StateHasChanged();
                 await StartSessionAsync();
             };
