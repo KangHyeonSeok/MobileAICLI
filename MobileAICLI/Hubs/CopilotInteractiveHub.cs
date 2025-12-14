@@ -10,12 +10,14 @@ namespace MobileAICLI.Hubs;
 /// SignalR Hub for Interactive Copilot sessions.
 /// Provides real-time communication for context-aware conversations with Copilot.
 /// Phase 2: Interactive Mode - Issue 3
+/// Phase 2: Interactive Mode - Issue 1
 /// </summary>
 public class CopilotInteractiveHub : Hub
 {
     private readonly ICopilotSessionService _sessionService;
     private readonly MobileAICLISettings _settings;
     private readonly ILogger<CopilotInteractiveHub> _logger;
+    private readonly ICopilotSessionService _sessionService;
 
     public CopilotInteractiveHub(
         ICopilotSessionService sessionService,
@@ -25,6 +27,21 @@ public class CopilotInteractiveHub : Hub
         _sessionService = sessionService;
         _settings = settings.Value;
         _logger = logger;
+        _sessionService = sessionService;
+    }
+
+    /// <summary>
+    /// Get user identifier from the current context
+    /// </summary>
+    private string GetUserId()
+    {
+        // Try to get user ID from authentication claims
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                  ?? Context.User?.FindFirst("sub")?.Value
+                  ?? Context.UserIdentifier
+                  ?? Context.ConnectionId; // Fallback to connection ID
+
+        return userId;
     }
 
     /// <summary>
@@ -57,18 +74,33 @@ public class CopilotInteractiveHub : Hub
             {
                 _logger.LogError("Failed to create session for user {UserId}: {Error}", MaskUserId(userId), error);
                 await Clients.Caller.SendAsync("ReceiveError", error, Context.ConnectionAborted);
+        _logger.LogInformation("StartSession called for user {UserId}", userId);
+
+        try
+        {
+            var (success, sessionId, error) = await _sessionService.CreateSessionAsync(userId);
+
+            if (success)
+            {
+                _logger.LogInformation("Session {SessionId} created for user {UserId}", sessionId, userId);
+                await Clients.Caller.SendAsync("SessionReady", sessionId);
+            }
+            else
+            {
+                _logger.LogWarning("Failed to create session for user {UserId}: {Error}", userId, error);
+                await Clients.Caller.SendAsync("ReceiveError", error);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error creating session for user {UserId}", MaskUserId(userId));
-            await Clients.Caller.SendAsync("ReceiveError", $"Failed to start session: {ex.Message}", Context.ConnectionAborted);
+            await Clients.Caller.SendAsync("ReceiveError", $"Failed to start session: {ex.Message}", Context.ConnectionAborted);            
         }
     }
 
     /// <summary>
     /// Send a message to an active interactive session.
-    /// Response is streamed back via ReceiveChunk and ReceiveComplete callbacks.
+    /// Response is streamed back chunk by chunk.
     /// </summary>
     /// <param name="sessionId">Session identifier</param>
     /// <param name="prompt">User's message/prompt</param>
@@ -262,6 +294,47 @@ public class CopilotInteractiveHub : Hub
             await Clients.Caller.SendAsync("ReceiveComplete", cancellationToken);
             _logger.LogInformation("SendMessage completed successfully for session {SessionId}", sessionId);
         }
+    /// <returns>Async enumerable for streaming response chunks</returns>
+    public async IAsyncEnumerable<string> SendMessage(string sessionId, string prompt)
+    {
+        _logger.LogInformation("SendMessage called for session {SessionId} - not yet implemented", sessionId);
+        await Task.CompletedTask;
+        throw new NotImplementedException("SendMessage will be implemented in Issue 1");
+        var userId = GetUserId();
+        _logger.LogInformation("SendMessage called for session {SessionId} by user {UserId}", sessionId, userId);
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            _logger.LogWarning("SendMessage called with empty session ID");
+            yield break;
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            _logger.LogWarning("SendMessage called with empty prompt");
+            yield break;
+        }
+
+        var session = _sessionService.GetSession(userId, sessionId);
+        if (session == null)
+        {
+            _logger.LogWarning("Session {SessionId} not found for user {UserId}", sessionId, userId);
+            yield break;
+        }
+
+        // Write the prompt to the session (outside of iteration)
+        await session.WriteAsync(prompt);
+
+        // Stream the response back
+        await foreach (var chunk in session.ReadResponseAsync())
+        {
+            if (!string.IsNullOrEmpty(chunk))
+            {
+                yield return chunk;
+            }
+        }
+
+        _logger.LogDebug("Message processing complete for session {SessionId}", sessionId);
     }
 
     /// <summary>
@@ -279,6 +352,11 @@ public class CopilotInteractiveHub : Hub
         }
 
         _logger.LogInformation("EndSession called for session {SessionId}, user {UserId}", sessionId, MaskUserId(userId));
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            _logger.LogWarning("EndSession called with empty session ID");
+            return;
+        }
 
         try
         {
@@ -290,12 +368,18 @@ public class CopilotInteractiveHub : Hub
             else
             {
                 _logger.LogWarning("Session {SessionId} not found or already removed for user {UserId}", sessionId, MaskUserId(userId));
+                _logger.LogInformation("Session {SessionId} ended successfully", sessionId);
+            }
+            else
+            {
+                _logger.LogWarning("Failed to end session {SessionId} - not found or not owned by user", sessionId);
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error ending session {SessionId} for user {UserId}", sessionId, MaskUserId(userId));
             await Clients.Caller.SendAsync("ReceiveError", $"Error ending session: {ex.Message}", Context.ConnectionAborted);
+            _logger.LogError(ex, "Error ending session {SessionId}", sessionId);
         }
     }
 
@@ -328,6 +412,7 @@ public class CopilotInteractiveHub : Hub
     /// <summary>
     /// Called when a client disconnects from the hub.
     /// Cleans up any active sessions for this connection based on configured policy.
+    /// Cleanup any active sessions for this connection.
     /// </summary>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
@@ -348,6 +433,11 @@ public class CopilotInteractiveHub : Hub
         // based on inactivity timeout. We don't immediately clean up on disconnect
         // to allow for reconnection scenarios.
 
+        _logger.LogInformation("Client disconnected: {ConnectionId}, UserId: {UserId}", Context.ConnectionId, userId);
+
+        // Note: Sessions are cleaned up by the background cleanup task in CopilotSessionService
+        // We don't immediately remove sessions on disconnect to allow reconnection scenarios
+        
         await base.OnDisconnectedAsync(exception);
     }
 
